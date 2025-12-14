@@ -35,7 +35,16 @@ export class Game {
 
         // Input
         this.keys = {};
-        window.addEventListener('keydown', (e) => this.keys[e.code] = true);
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.code] = true;
+            if ((e.code === 'Space' || e.code === 'Enter') && this.gameState === 'SCORING') {
+                if (this.socket) {
+                    this.socket.emit('requestRestart');
+                } else {
+                    this.resetLocalGame();
+                }
+            }
+        });
         window.addEventListener('keyup', (e) => this.keys[e.code] = false);
 
         // Touch
@@ -45,8 +54,27 @@ export class Game {
         window.addEventListener('touchend', () => this.touchDir = 0);
 
         // Audio & Visual init
-        window.addEventListener('click', () => this.audio.init(), { once: true });
-        window.addEventListener('touchstart', () => this.audio.init(), { once: true });
+        // Audio & Visual init
+        window.addEventListener('click', () => {
+            this.audio.init();
+            if (this.gameState === 'SCORING') {
+                if (this.socket) {
+                    this.socket.emit('requestRestart');
+                } else {
+                    this.resetLocalGame();
+                }
+            }
+        });
+        window.addEventListener('touchstart', () => {
+            this.audio.init();
+            if (this.gameState === 'SCORING') {
+                if (this.socket) {
+                    this.socket.emit('requestRestart');
+                } else {
+                    this.resetLocalGame();
+                }
+            }
+        });
 
         this.flashTime = 0;
     }
@@ -66,15 +94,18 @@ export class Game {
         this.score = 0;
         this.timeElapsed = 0;
 
-        // Reset Physics immediate or wait? 
-        // Let's reset ball position but keep polygon rotation for visual continuity?
-        // Or reset everything.
-        // User said: "reset (pace/speed reset to starting low pace)"
-        // "number of seconds in play should be celebrated"
+        // In local mode, we need to stop physics now, which update() does.
+        // But we need a way to restart.
+    }
 
+    resetLocalGame() {
+        this.gameState = 'PLAYING';
         this.resetBall();
+        this.difficulty = 1.0;
+        this.score = 0;
+        this.timeElapsed = 0;
         this.polygon.rotationSpeed = 0.5;
-        this.paddles.forEach(p => p.width = 0.2); // Reset paddle size
+        this.paddles.forEach(p => p.width = 0.2);
     }
 
     startMultiplayer(roomId) {
@@ -186,6 +217,8 @@ export class Game {
 
     handleOnlineInput(dt) {
         if (!this.socket) return;
+        if (this.gameState === 'SCORING') return; // Block input during freeze
+
 
         // --- Interpolation Logic ---
         this.applyInterpolation();
@@ -298,15 +331,7 @@ export class Game {
 
     update(dt) {
         if (this.gameState === 'SCORING') {
-            this.scoreDisplayTimer -= dt;
-            // Still rotate polygon slowly for effect?
-            this.polygon.rotation += 0.2 * dt;
-            this.polygon.updateVertices();
-
-            if (this.scoreDisplayTimer <= 0) {
-                this.gameState = 'PLAYING';
-                this.resetBall();
-            }
+            // TOTAL FREEZE on client too
             return;
         }
 
@@ -548,7 +573,8 @@ export class Game {
             this.ctx.fillText(`SURVIVED: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 10);
 
             this.ctx.font = '24px Inter, sans-serif';
-            this.ctx.fillText(`Restarting in ${Math.ceil(this.scoreDisplayTimer)}...`, this.canvas.width / 2, this.canvas.height / 2 + 60);
+            // this.ctx.fillText(`Restarting in ${Math.ceil(this.scoreDisplayTimer)}...`, this.canvas.width / 2, this.canvas.height / 2 + 60);
+            this.ctx.fillText(`CLICK OR PRESS SPACE TO RESTART`, this.canvas.width / 2, this.canvas.height / 2 + 60);
         }
     }
 }

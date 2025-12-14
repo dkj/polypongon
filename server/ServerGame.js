@@ -51,6 +51,8 @@ export class ServerGame {
     }
 
     handleInput(socketId, dir) {
+        if (this.gameState === 'SCORING') return; // Ignore input during freeze
+
         if (!this.players.has(socketId)) return;
         const index = this.players.get(socketId);
         // Find paddle with this edgeIndex? 
@@ -90,20 +92,8 @@ export class ServerGame {
 
     update(dt) {
         if (this.gameState === 'SCORING') {
-            this.scoreDisplayTimer -= dt;
-            this.polygon.rotation += 0.2 * dt;
-            this.polygon.updateVertices();
-
-            if (this.scoreDisplayTimer <= 0) {
-                this.gameState = 'PLAYING';
-                this.resetBall();
-                // Reset physics params
-                this.difficulty = 1.0;
-                this.score = 0;
-                this.timeElapsed = 0;
-                this.polygon.rotationSpeed = 0.5;
-                this.paddles.forEach(p => p.width = 0.2);
-            }
+            // TOTAL FREEZE: No physics updates, no rotation, no timer decrement.
+            // Just wait for explicit restart signal.
             return;
         }
 
@@ -297,10 +287,31 @@ export class ServerGame {
     triggerScore(finalScore) {
         this.gameState = 'SCORING';
         this.lastScore = Math.floor(finalScore);
-        this.scoreDisplayTimer = 5.0;
+        this.scoreDisplayTimer = 0; // Not used for auto-restart anymore, but maybe for UI flashing?
 
         // Broadcast Goal event
         this.io.to(this.roomId).emit('gameEvent', { type: 'goal', score: this.lastScore });
+    }
+
+    processRestart() {
+        if (this.gameState === 'SCORING') {
+            this.resetGame();
+        }
+    }
+
+    resetGame() {
+        this.gameState = 'PLAYING';
+        this.resetBall();
+
+        // Reset physics params
+        this.difficulty = 1.0;
+        this.score = 0;
+        this.timeElapsed = 0;
+        this.polygon.rotationSpeed = 0.5;
+        this.paddles.forEach(p => p.width = 0.2);
+
+        // Broadcast immediate state update to ensure clients unfreeze
+        this.broadcastState();
     }
 
     broadcastState() {

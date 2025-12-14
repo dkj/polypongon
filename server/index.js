@@ -38,6 +38,11 @@ io.on('connection', (socket) => {
       if (game) game.handleInput(socket.id, data.dir);
     });
 
+    socket.on('requestRestart', () => {
+      if (game) game.processRestart();
+    });
+
+
     // Handle disconnect specifically for this room context
     socket.on('disconnect', () => {
       console.log('user disconnected', socket.id);
