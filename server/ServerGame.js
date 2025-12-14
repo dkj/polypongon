@@ -124,7 +124,7 @@ export class ServerGame {
             p.width = targetWidth;
             if (p.moveDirection) {
                 p.move(p.moveDirection, dt);
-                p.moveDirection = 0;
+                // NOTE: Don't reset moveDirection! Client sends dir=0 when key is released.
             }
         });
 
@@ -182,7 +182,15 @@ export class ServerGame {
                         this.pushBallOut(p1, p2);
                         collided = true;
                     } else {
-                        // Missed
+                        // Missed - DEBUG LOG
+                        const edgeX = p2.x - p1.x;
+                        const edgeY = p2.y - p1.y;
+                        const len2 = edgeX * edgeX + edgeY * edgeY;
+                        const t = ((checkPoint.x - p1.x) * edgeX + (checkPoint.y - p1.y) * edgeY) / len2;
+                        const w = paddle.width * 1.1;
+                        const pStart = paddle.position - w / 2;
+                        const pEnd = paddle.position + w / 2;
+                        console.log(`[GOAL] Edge ${i}: checkPoint t=${t.toFixed(3)}, paddle range=[${pStart.toFixed(3)}, ${pEnd.toFixed(3)}], paddle.position=${paddle.position.toFixed(3)}, paddle.width=${paddle.width.toFixed(3)}`);
                         this.triggerScore(this.score);
                         return;
                     }
@@ -322,7 +330,11 @@ export class ServerGame {
         this.score = 0;
         this.timeElapsed = 0;
         this.polygon.rotationSpeed = 0.5;
-        this.paddles.forEach(p => p.width = 0.2);
+        this.paddles.forEach(p => {
+            p.width = 0.2;
+            p.position = 0.5; // Reset to center
+            p.moveDirection = 0; // Clear any pending movement
+        });
 
         // Broadcast immediate state update to ensure clients unfreeze
         this.broadcastState();
@@ -334,7 +346,7 @@ export class ServerGame {
         this.io.to(this.roomId).emit('gameState', {
             ball: { x: this.ball.x, y: this.ball.y },
             rotation: this.polygon.rotation,
-            paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position })),
+            paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position, width: p.width })),
             difficulty: this.difficulty,
             gameState: this.gameState,
             score: this.score,

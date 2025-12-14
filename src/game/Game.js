@@ -167,10 +167,10 @@ export class Game {
                 this.flashEffect();
             }
             if (event.type === 'goal') {
-                // Should trigger same effect as miss basically, handled by state sync mostly?
-                // Visual effect is enough.
+                // Snap to latest state immediately on goal (no interpolation delay)
+                this.stateBuffer = [];
                 this.flashEffect();
-                this.audio.playBounce(); // Maybe different sound?
+                this.audio.playBounce();
             }
         });
     }
@@ -300,15 +300,23 @@ export class Game {
         this.paddles = s1.paddles.map(pData1 => {
             // Is this me?
             if (this.playerIndex !== -1 && pData1.edgeIndex === this.playerIndex) {
-                // Keep my existing paddle instance to preserve local prediction state
-                // If doesn't exist, create it.
+                // Keep my existing paddle instance to preserve some local prediction
                 let myPaddle = this.paddles.find(p => p.edgeIndex === this.playerIndex);
                 if (!myPaddle) myPaddle = new Paddle(pData1.edgeIndex);
 
                 // Update width from server (gameplay sync)
-                myPaddle.width = Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+                myPaddle.width = pData1.width ?? Math.max(0.1, 0.2 / (this.difficulty * 0.8));
 
-                // DO NOT touch position. Prediction handles it.
+                // RECONCILIATION: Blend predicted position towards server position
+                // This prevents drift while still allowing responsive local movement
+                const serverPos = pData1.position;
+                const drift = Math.abs(myPaddle.position - serverPos);
+                if (drift > 0.01) {
+                    // Blend towards server position (faster correction for larger drift)
+                    const blendFactor = Math.min(0.3, drift * 2);
+                    myPaddle.position = myPaddle.position + (serverPos - myPaddle.position) * blendFactor;
+                }
+
                 return myPaddle;
             }
 
@@ -324,7 +332,7 @@ export class Game {
                 p.position = pData1.position; // No history, snap to target
             }
 
-            p.width = Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+            p.width = pData1.width ?? Math.max(0.1, 0.2 / (this.difficulty * 0.8));
             return p;
         });
     }

@@ -138,8 +138,79 @@ function testGameStartsFrozen() {
     game.stop();
 }
 
+function testPaddleWidthBroadcast() {
+    console.log('\nTest: Paddle Width Broadcast');
+    const game = new ServerGame(mockIo, 'test_room_width');
+    game.addPlayer('p1');
+    game.start();
+    game.processRestart(); // Start playing
+
+    // Simulate some time passing to change difficulty/width
+    for (let i = 0; i < 60; i++) {
+        game.update(0.5); // 30 seconds of game time total
+    }
+
+    // Get broadcast state by capturing what would be sent
+    let capturedState = null;
+    const captureIo = {
+        to: () => ({
+            emit: (event, data) => {
+                if (event === 'gameState') capturedState = data;
+            }
+        })
+    };
+    game.io = captureIo;
+    game.broadcastState();
+
+    // Verify paddle width is included in broadcast
+    assert.ok(capturedState, 'State should be broadcast');
+    assert.ok(capturedState.paddles, 'Paddles should be in state');
+    assert.ok(capturedState.paddles.length > 0, 'Should have at least one paddle');
+
+    const paddle = capturedState.paddles[0];
+    assert.ok(paddle.width !== undefined, 'Paddle width should be broadcast');
+    assert.ok(typeof paddle.width === 'number', 'Paddle width should be a number');
+    assert.ok(paddle.width > 0 && paddle.width <= 0.25, 'Paddle width should be reasonable (0 < w <= 0.25)');
+
+    console.log('✅ Passed: Paddle width is broadcast:', paddle.width);
+    game.stop();
+}
+
+function testGoalEventIncludesScore() {
+    console.log('\nTest: Goal Event Emits Score');
+    const game = new ServerGame(mockIo, 'test_room_goal');
+    game.addPlayer('p1');
+    game.start();
+    game.processRestart();
+
+    // Capture emitted events
+    let goalEvent = null;
+    const captureIo = {
+        to: () => ({
+            emit: (event, data) => {
+                if (event === 'gameEvent' && data.type === 'goal') {
+                    goalEvent = data;
+                }
+            }
+        })
+    };
+    game.io = captureIo;
+
+    // Trigger a goal
+    game.triggerScore(7.5);
+
+    assert.ok(goalEvent, 'Goal event should be emitted');
+    assert.equal(goalEvent.type, 'goal', 'Event type should be goal');
+    assert.equal(goalEvent.score, 7, 'Score should be included (floored)');
+
+    console.log('✅ Passed: Goal event includes score.');
+    game.stop();
+}
+
 testGameStartsFrozen();
 testFreezeAndRestart();
 testMultiplayerFreezeAndRestart();
+testPaddleWidthBroadcast();
+testGoalEventIncludesScore();
 
 console.log('--- All Gameplay Tests Passed ---');
