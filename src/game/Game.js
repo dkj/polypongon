@@ -321,6 +321,7 @@ export class Game {
         // 1. Ball
         this.ball.x = lerp(s0.ball.x, s1.ball.x, t);
         this.ball.y = lerp(s0.ball.y, s1.ball.y, t);
+        this.ball.updateTrail();
 
         // 2. Rotation
         // Handle angle wrap-around if needed? (0 -> 2PI). Currently generic float, should suffice.
@@ -643,12 +644,10 @@ export class Game {
         });
 
         // Draw Ball
-        this.ctx.fillStyle = '#fff';
-        this.ctx.shadowColor = '#fff';
-        this.ctx.shadowBlur = 15;
-        this.ctx.beginPath();
-        this.ctx.arc(this.ball.x, this.ball.y, this.ball.radius, 0, Math.PI * 2);
-        this.ctx.fill();
+
+        // Draw Ball
+        this.ball.draw(this.ctx, 0, 0); // Context is already translated
+
 
         this.ctx.restore();
 
