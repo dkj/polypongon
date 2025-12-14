@@ -96,6 +96,49 @@ function testMultiplayerFreezeAndRestart() {
     game.stop();
 }
 
+function testGameStartsFrozen() {
+    console.log('\nTest: Game Starts Frozen (No Autostart)');
+
+    // 1. Create a new game - should start frozen
+    const game = new ServerGame(mockIo, 'test_room_frozen');
+
+    assert.equal(game.gameState, 'SCORING', 'Game should start in SCORING (frozen) state');
+    console.log('✅ Passed: Game initial state is SCORING (frozen).');
+
+    // 2. Add a player and start the loop
+    game.addPlayer('p1');
+    game.start();
+
+    // 3. Verify still frozen after updates
+    const initialBallX = game.ball.x;
+    const initialBallY = game.ball.y;
+    const initialRotation = game.polygon.rotation;
+
+    for (let i = 0; i < 60; i++) { // 1 second of updates
+        game.update(0.016);
+    }
+
+    assert.equal(game.gameState, 'SCORING', 'Game should remain frozen after updates');
+    assert.equal(game.ball.x, initialBallX, 'Ball X should not move while frozen');
+    assert.equal(game.ball.y, initialBallY, 'Ball Y should not move while frozen');
+    assert.equal(game.polygon.rotation, initialRotation, 'Polygon should not rotate while frozen');
+    console.log('✅ Passed: Physics frozen on start - no auto-play.');
+
+    // 4. Player triggers restart - game should start
+    game.processRestart();
+
+    assert.equal(game.gameState, 'PLAYING', 'Game should switch to PLAYING after restart');
+    console.log('✅ Passed: Game started after manual restart.');
+
+    // 5. Now updates should affect physics
+    game.update(0.1);
+    assert.notEqual(game.polygon.rotation, initialRotation, 'Polygon should rotate after game starts');
+    console.log('✅ Passed: Physics active after restart.');
+
+    game.stop();
+}
+
+testGameStartsFrozen();
 testFreezeAndRestart();
 testMultiplayerFreezeAndRestart();
 

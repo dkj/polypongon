@@ -21,7 +21,7 @@ export class Game {
         this.socket = null;
         this.playerIndex = -1;
 
-        this.gameState = 'PLAYING'; // 'PLAYING' | 'SCORING'
+        this.gameState = 'SCORING'; // 'PLAYING' | 'SCORING' - Start frozen, user clicks to begin
         this.score = 0; // Current time survived
         this.lastScore = 0; // Score of last round
         this.scoreDisplayTimer = 0;

@@ -18,7 +18,7 @@ export class ServerGame {
         this.timeElapsed = 0;
         this.difficulty = 1.0;
 
-        this.gameState = 'PLAYING'; // 'PLAYING' | 'SCORING'
+        this.gameState = 'SCORING'; // 'PLAYING' | 'SCORING' - Start frozen, player clicks to begin
         this.score = 0;
         this.lastScore = 0;
         this.scoreDisplayTimer = 0;
