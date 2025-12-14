@@ -1,0 +1,321 @@
+import { Polygon } from '../src/game/Polygon.js';
+import { Ball } from '../src/game/Ball.js';
+import { Paddle } from '../src/game/Paddle.js';
+
+export class ServerGame {
+    constructor(io, roomId) {
+        this.io = io;
+        this.roomId = roomId;
+
+        // Game Objects
+        this.polygon = new Polygon(250, 5); // Default 5 sides
+        this.ball = new Ball(0, 0);
+        this.paddles = [];
+        // Players mapping: socketId -> edgeIndex
+        this.players = new Map();
+
+        this.lastTime = performance.now();
+        this.timeElapsed = 0;
+        this.difficulty = 1.0;
+
+        this.gameState = 'PLAYING'; // 'PLAYING' | 'SCORING'
+        this.score = 0;
+        this.lastScore = 0;
+        this.scoreDisplayTimer = 0;
+
+        this.running = false;
+
+        // Loop interval
+        this.interval = null;
+    }
+
+    addPlayer(socketId) {
+        // Find next available edge
+        if (this.paddles.length >= this.polygon.sides) return -1;
+
+        const edgeIndex = this.paddles.length;
+        const paddle = new Paddle(edgeIndex);
+        this.paddles.push(paddle);
+        this.players.set(socketId, edgeIndex);
+
+        return edgeIndex;
+    }
+
+    removePlayer(socketId) {
+        if (!this.players.has(socketId)) return;
+        const index = this.players.get(socketId);
+        this.players.delete(socketId);
+        // We probably shouldn't remove the paddle mid-game to preserve indices?
+        // Or turn it into AI/Wall?
+        // For now, keep the paddle but it won't move.
+    }
+
+    handleInput(socketId, dir) {
+        if (!this.players.has(socketId)) return;
+        const index = this.players.get(socketId);
+        // Find paddle with this edgeIndex? 
+        // Actually paddles array might not be ordered by edgeIndex if we removed some?
+        // I used edgeIndex = paddles.length.
+        // Let's assume paddles[index] corresponds if we don't delete.
+        if (this.paddles[index]) {
+            this.paddles[index].moveDirection = dir; // Storing input state
+        }
+    }
+
+    start() {
+        this.running = true;
+        this.lastTime = performance.now();
+        const FPS = 60;
+        this.interval = setInterval(() => this.loop(), 1000 / FPS);
+    }
+
+    stop() {
+        this.running = false;
+        clearInterval(this.interval);
+    }
+
+    loop() {
+        try {
+            const time = performance.now();
+            const dt = (time - this.lastTime) / 1000;
+            this.lastTime = time;
+
+            this.update(dt);
+            this.broadcastState();
+        } catch (e) {
+            console.error('ServerGame Loop Error:', e);
+            this.stop();
+        }
+    }
+
+    update(dt) {
+        if (this.gameState === 'SCORING') {
+            this.scoreDisplayTimer -= dt;
+            this.polygon.rotation += 0.2 * dt;
+            this.polygon.updateVertices();
+
+            if (this.scoreDisplayTimer <= 0) {
+                this.gameState = 'PLAYING';
+                this.resetBall();
+                // Reset physics params
+                this.difficulty = 1.0;
+                this.score = 0;
+                this.timeElapsed = 0;
+                this.polygon.rotationSpeed = 0.5;
+                this.paddles.forEach(p => p.width = 0.2);
+            }
+            return;
+        }
+
+        const prevBallX = this.ball.x;
+        const prevBallY = this.ball.y;
+
+        this.timeElapsed += dt;
+        this.score += dt;
+
+        this.difficulty = 1 + this.timeElapsed / 30;
+
+        this.polygon.rotationSpeed = 0.5 * this.difficulty;
+        this.polygon.update(dt);
+
+        const currentSpeed = Math.sqrt(this.ball.vx ** 2 + this.ball.vy ** 2);
+        const targetSpeed = 200 * this.difficulty;
+        if (currentSpeed < targetSpeed) {
+            const scale = targetSpeed / currentSpeed;
+            this.ball.vx *= scale;
+            this.ball.vy *= scale;
+        }
+
+        this.ball.update(dt);
+
+        // Update Paddles
+        const targetWidth = Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+        this.paddles.forEach(p => {
+            p.width = targetWidth;
+            if (p.moveDirection) {
+                p.move(p.moveDirection, dt);
+                p.moveDirection = 0;
+            }
+        });
+
+        this.checkCollisions(prevBallX, prevBallY);
+    }
+
+    checkCollisions(prevX, prevY) {
+        const vertices = this.polygon.vertices;
+        const ball = this.ball;
+        let collided = false;
+
+        // CCD: Raycast from Prev -> Curr
+        const ballDist = Math.sqrt((ball.x - prevX) ** 2 + (ball.y - prevY) ** 2);
+        // If movement is tiny, fallback to simple radius check to avoid precision issues
+        // But for reliability with fast balls, we combine both:
+        // 1. Raycast for tunneling.
+        // 2. Radius check for glancing blows (optional, but good for accuracy).
+
+        for (let i = 0; i < vertices.length; i++) {
+            const p1 = vertices[i];
+            const p2 = vertices[(i + 1) % vertices.length];
+
+            // 1. Segment Intersection (Tunneling Prevention)
+            const intersect = this.getLineIntersection(prevX, prevY, ball.x, ball.y, p1.x, p1.y, p2.x, p2.y);
+
+            // 2. Point-Line Distance (Glancing Blow protection)
+            const dist = this.pointLineDist(ball.x, ball.y, p1.x, p1.y, p2.x, p2.y);
+            const isGlancing = dist < ball.radius + 2;
+
+            if (intersect || isGlancing) {
+                // Determine collision point for paddle check
+                // If we tunneled, use the exact intersection point on the wall line.
+                // If glancing, project the ball onto the line (closest point).
+                let checkPoint = ball;
+                if (intersect) {
+                    checkPoint = intersect;
+                } else {
+                    // Project ball onto line segment for glancing check
+                    checkPoint = this.getClosestPointOnSegment(p1, p2, ball);
+                }
+
+                const hasPaddle = this.paddles.some(p => p.edgeIndex === i);
+
+                if (hasPaddle) {
+                    const paddle = this.paddles.find(p => p.edgeIndex === i);
+                    // GRACE MARGIN: Reduced to 1.1x (10% extra per side) to reduce phantom hits
+                    // Using checkPoint instead of ball ensures finding correct position on the line
+                    if (this.checkPaddleHit(checkPoint, p1, p2, paddle, 1.1)) {
+                        this.reflectBall(p1, p2);
+                        // Push ball out of wall slightly along normal to prevent sticking
+                        this.pushBallOut(p1, p2);
+                        collided = true;
+                    } else {
+                        // Missed
+                        this.triggerScore(this.score);
+                        return;
+                    }
+                } else {
+                    this.reflectBall(p1, p2);
+                    this.pushBallOut(p1, p2);
+                    collided = true;
+                }
+            }
+            if (collided) {
+                this.io.to(this.roomId).emit('gameEvent', { type: 'bounce' });
+                break;
+            }
+        }
+    }
+
+    // Helper: Move ball slightly away from wall along normal to fix 'stuck' or 're-trigger' issues
+    pushBallOut(p1, p2) {
+        let nx = -(p2.y - p1.y);
+        let ny = (p2.x - p1.x);
+        const len = Math.sqrt(nx * nx + ny * ny);
+        nx /= len;
+        ny /= len;
+        // Ensure normal points INWARD (towards 0,0) - polygon vertices are usually CCW?
+        // Just check dprod with center. Center is 0,0.
+        // Current center of polygon is 0,0.
+        // The p1->p2 vector. Normal is (-dy, dx).
+        // If poly is centered at 0,0, we want to push towards 0,0 if inside? 
+        // Actually reflectBall logic assumes normal.
+        // Let's just push based on current velocity? Push 'back' along velocity?
+        // Or just push 2 units along calculated reflection normal.
+        this.ball.x += nx * 2;
+        this.ball.y += ny * 2;
+    }
+
+    getLineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
+        const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+        if (denom === 0) return null;
+        const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+        const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+        if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+            return { x: x1 + ua * (x2 - x1), y: y1 + ua * (y2 - y1) };
+        }
+        return null;
+    }
+
+    getClosestPointOnSegment(p1, p2, p) {
+        const edgeX = p2.x - p1.x;
+        const edgeY = p2.y - p1.y;
+        const len2 = edgeX * edgeX + edgeY * edgeY;
+        let t = ((p.x - p1.x) * edgeX + (p.y - p1.y) * edgeY) / len2;
+        t = Math.max(0, Math.min(1, t));
+        return { x: p1.x + t * edgeX, y: p1.y + t * edgeY };
+    }
+
+    pointLineDist(x0, y0, x1, y1, x2, y2) {
+        return Math.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) / Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+    }
+
+    checkPaddleHit(point, p1, p2, paddle, graceMultiplier = 1.0) {
+        const edgeX = p2.x - p1.x;
+        const edgeY = p2.y - p1.y;
+        const len2 = edgeX * edgeX + edgeY * edgeY;
+        const t = ((point.x - p1.x) * edgeX + (point.y - p1.y) * edgeY) / len2;
+
+        const w = paddle.width * graceMultiplier;
+        const pStart = paddle.position - w / 2;
+        const pEnd = paddle.position + w / 2;
+        return t >= pStart && t <= pEnd;
+    }
+
+    reflectBall(p1, p2) {
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        let nx = -(p2.y - p1.y);
+        let ny = (p2.x - p1.x);
+        const len = Math.sqrt(nx * nx + ny * ny);
+        nx /= len;
+        ny /= len;
+
+        if (nx * (-mx) + ny * (-my) < 0) {
+            nx = -nx;
+            ny = -ny;
+        }
+
+        const dot = this.ball.vx * nx + this.ball.vy * ny;
+        this.ball.vx = this.ball.vx - 2 * dot * nx;
+        this.ball.vy = this.ball.vy - 2 * dot * ny;
+
+        this.ball.x += nx * 2;
+        this.ball.y += ny * 2;
+
+        this.ball.vx *= 1.05;
+        this.ball.vy *= 1.05;
+    }
+
+    resetBall() {
+        this.ball.x = 0;
+        this.ball.y = 0;
+        const speed = 200;
+        const angle = Math.random() * Math.PI * 2;
+        this.ball.vx = Math.cos(angle) * speed;
+        this.ball.vy = Math.sin(angle) * speed;
+    }
+
+    triggerScore(finalScore) {
+        this.gameState = 'SCORING';
+        this.lastScore = Math.floor(finalScore);
+        this.scoreDisplayTimer = 5.0;
+
+        // Broadcast Goal event
+        this.io.to(this.roomId).emit('gameEvent', { type: 'goal', score: this.lastScore });
+    }
+
+    broadcastState() {
+        // Send compressed state
+        // if (Math.random() < 0.01) console.log('Broadcasting state for room', this.roomId);
+        this.io.to(this.roomId).emit('gameState', {
+            ball: { x: this.ball.x, y: this.ball.y },
+            rotation: this.polygon.rotation,
+            paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position })),
+            difficulty: this.difficulty,
+            gameState: this.gameState,
+            score: this.score,
+            lastScore: this.lastScore,
+            scoreDisplayTimer: this.scoreDisplayTimer,
+            timestamp: Date.now()
+        });
+    }
+}

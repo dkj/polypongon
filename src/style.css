@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+:root {
+  --bg-color: #0f172a;
+  /* Slate 900 */
+  --accent-color: #38bdf8;
+  /* Sky 400 */
+  --text-color: #f8fafc;
+  /* Slate 50 */
+  --glow-color: rgba(56, 189, 248, 0.5);
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  box-shadow: 0 0 50px var(--glow-color);
+  border-radius: 50%;
+  /* Optional circle constraint visual? Maybe not for polygon game */
+  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
+}
+
+.ui-layer {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  pointer-events: none;
+}
+
+.ui-layer button {
+  pointer-events: auto;
+}
