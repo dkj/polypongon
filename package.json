@@ -13,6 +13,7 @@
     "test:browser": "playwright test",
     "dev": "vite",
     "build": "vite build",
+    "build:static": "VITE_STATIC_BUILD=true vite build",
     "preview": "vite preview",
     "server": "node server/index.js"
   },

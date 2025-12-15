@@ -6,9 +6,11 @@ document.querySelector('#app').innerHTML = `
   <canvas id="gameCanvas"></canvas>
   <div class="ui-layer">
     <h1 style="margin: 0; font-weight: 600;">POLYPONGON</h1>
+    ${import.meta.env.VITE_STATIC_BUILD === 'true' ? '' : `
     <button id="onlineBtn" style="margin-top: 10px; padding: 10px 20px; background: #38bdf8; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
       PLAY ONLINE
     </button>
+    `}
   </div>
   <div id="qr-container" style="position: absolute; top: 20px; right: 20px; display: none;">
     <canvas id="qrCanvas"></canvas>
@@ -41,18 +43,19 @@ if (roomFromUrl) {
   showQRCode(window.location.href);
 }
 
-document.getElementById('onlineBtn').addEventListener('click', () => {
-  const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
-  console.log('Online button clicked! Created room:', roomId);
+const onlineBtn = document.getElementById('onlineBtn');
+if (onlineBtn) {
+  onlineBtn.addEventListener('click', () => {
+    const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
+    console.log('Online button clicked! Created room:', roomId);
 
-  // Update URL without reload
-  const newUrl = `${window.location.pathname}?room=${roomId}`;
-  window.history.pushState({ path: newUrl }, '', newUrl);
+    // Update URL without reload
+    const newUrl = `${window.location.pathname}?room=${roomId}`;
+    window.history.pushState({ path: newUrl }, '', newUrl);
 
-  game.startMultiplayer(roomId);
-  showQRCode(window.location.href);
+    game.startMultiplayer(roomId);
+    showQRCode(window.location.href);
 
-  const btn = document.getElementById('onlineBtn');
-  btn.style.display = 'none';
-
-});
+    onlineBtn.style.display = 'none';
+  });
+}
