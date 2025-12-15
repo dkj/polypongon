@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 document.querySelector('#app').innerHTML = `
   <canvas id="gameCanvas"></canvas>
   <div class="ui-layer">
-    <h1 style="margin: 0; font-weight: 600;">POLYPONG</h1>
+    <h1 style="margin: 0; font-weight: 600;">POLYPONGON</h1>
     <button id="onlineBtn" style="margin-top: 10px; padding: 10px 20px; background: #38bdf8; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
       PLAY ONLINE
     </button>
