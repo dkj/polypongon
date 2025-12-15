@@ -17,6 +17,7 @@ export class ServerGame {
         this.lastTime = performance.now();
         this.timeElapsed = 0;
         this.difficulty = 1.0;
+        this.rotationDirection = 1;
 
         this.gameState = 'SCORING'; // 'PLAYING' | 'SCORING' - Start frozen, player clicks to begin
         this.score = 0;
@@ -123,7 +124,7 @@ export class ServerGame {
 
         this.difficulty = 1 + this.timeElapsed / 30;
 
-        this.polygon.rotationSpeed = 0.5 * this.difficulty;
+        this.polygon.rotationSpeed = 0.5 * this.difficulty * this.rotationDirection;
         this.polygon.update(dt);
 
         const currentSpeed = Math.sqrt(this.ball.vx ** 2 + this.ball.vy ** 2);
@@ -347,7 +348,9 @@ export class ServerGame {
         this.difficulty = 1.0;
         this.score = 0;
         this.timeElapsed = 0;
-        this.polygon.rotationSpeed = 0.5;
+        // Randomize rotation direction: 1 or -1
+        this.rotationDirection = Math.random() < 0.5 ? 1 : -1;
+        this.polygon.rotationSpeed = 0.5 * this.rotationDirection;
         this.paddles.forEach(p => {
             p.width = 0.2;
             p.position = 0.5; // Reset to center

@@ -29,6 +29,7 @@ export class Game {
         // Loop State
         this.timeElapsed = 0;
         this.difficulty = 1.0;
+        this.rotationDirection = 1; // Default
         this.lastTime = 0;
 
         window.addEventListener('resize', () => this.resize());
@@ -112,7 +113,9 @@ export class Game {
         this.difficulty = 1.0;
         this.score = 0;
         this.timeElapsed = 0;
-        this.polygon.rotationSpeed = 0.5;
+        // Randomize rotation direction: 1 or -1
+        this.rotationDirection = Math.random() < 0.5 ? 1 : -1;
+        this.polygon.rotationSpeed = 0.5 * this.rotationDirection;
         this.paddles.forEach(p => p.width = 0.2);
     }
 
@@ -391,7 +394,7 @@ export class Game {
 
         this.audio.setDifficulty(this.difficulty);
 
-        this.polygon.rotationSpeed = 0.5 * this.difficulty;
+        this.polygon.rotationSpeed = 0.5 * this.difficulty * this.rotationDirection;
         this.polygon.update(dt);
 
         const currentSpeed = Math.sqrt(this.ball.vx ** 2 + this.ball.vy ** 2);
