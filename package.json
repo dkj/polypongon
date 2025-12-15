@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "test": "npm run test:unit && npm run test:browser",
     "test:unit": "node test/physics_test.js && node test/gameplay_test.js && node test/verification_test.js",
