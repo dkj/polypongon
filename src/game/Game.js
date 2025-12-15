@@ -675,7 +675,7 @@ export class Game {
             this.ctx.shadowBlur = 20;
             this.ctx.font = 'bold 48px Inter, sans-serif';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText("GOAL CONCEDED!", this.canvas.width / 2, this.canvas.height / 2 - 50);
+            this.ctx.fillText("YOU'VE BEEN PONGED!", this.canvas.width / 2, this.canvas.height / 2 - 50);
 
             this.ctx.fillStyle = '#fff';
             this.ctx.font = 'bold 32px Inter, sans-serif';
