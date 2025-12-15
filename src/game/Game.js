@@ -39,6 +39,7 @@ export class Game {
         window.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
             if ((e.code === 'Space' || e.code === 'Enter')) {
+                this.audio.init();
                 if (this.gameState === 'SCORING') {
                     if (this.socket) {
                         this.socket.emit('requestRestart');

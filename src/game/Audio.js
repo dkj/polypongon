@@ -14,10 +14,16 @@ export class AudioManager {
     }
 
     async init() {
+        if (this.isPlaying) return;
+
         if (this.ctx.state === 'suspended') {
             await this.ctx.resume();
         }
+
+        if (this.isPlaying) return; // check again after await
+
         this.isPlaying = true;
+        console.log('Audio initialized and scheduler started');
         this.nextNoteTime = this.ctx.currentTime;
         this.scheduler();
     }
