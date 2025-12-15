@@ -1,7 +1,14 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { resolvePort } from './config.js';
 import { ServerGame } from './ServerGame.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
@@ -11,6 +18,16 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
+
+const distPath = path.resolve(__dirname, '../dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get(/^.*$/, (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  console.warn(`Static assets not found at ${distPath}. Only socket services will be available.`);
+}
 
 const games = new Map(); // roomId -> ServerGame
 
@@ -58,7 +75,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 12122;
+const PORT = resolvePort();
 httpServer.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
