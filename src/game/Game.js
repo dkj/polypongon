@@ -231,6 +231,10 @@ export class Game {
         this.canvas.height = window.innerHeight;
         this.centerX = this.canvas.width / 2;
         this.centerY = this.canvas.height / 2;
+
+        // Scale to fit: 600px is the "safe" logical size (250px radius + padding)
+        const minDim = Math.min(this.canvas.width, this.canvas.height);
+        this.gameScale = minDim / 600;
     }
 
     start() {
@@ -586,6 +590,7 @@ export class Game {
 
         this.ctx.save();
         this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.scale(this.gameScale, this.gameScale);
 
         // Draw Polygon Edges (Walls)
         const vertices = this.polygon.vertices;
@@ -663,12 +668,13 @@ export class Game {
         }
 
         // draw UI (Score, etc.)
+        const s = this.gameScale || 1;
         this.ctx.fillStyle = '#fff';
-        this.ctx.font = '24px Inter, sans-serif';
+        this.ctx.font = `${24 * s}px Inter, sans-serif`;
         this.ctx.textAlign = 'left';
 
         if (this.gameState === 'PLAYING') {
-            this.ctx.fillText(`Score: ${Math.floor(this.score)}`, 20, 40);
+            this.ctx.fillText(`Score: ${Math.floor(this.score)}`, 20 * s, 40 * s);
         } else if (this.gameState === 'SCORING') {
             // ... existing scoring UI
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -677,17 +683,17 @@ export class Game {
             this.ctx.fillStyle = '#38bdf8';
             this.ctx.shadowColor = '#38bdf8';
             this.ctx.shadowBlur = 20;
-            this.ctx.font = 'bold 48px Inter, sans-serif';
+            this.ctx.font = `bold ${48 * s}px Inter, sans-serif`;
             this.ctx.textAlign = 'center';
-            this.ctx.fillText("YOU'VE BEEN PONGED!", this.canvas.width / 2, this.canvas.height / 2 - 50);
+            this.ctx.fillText("YOU'VE BEEN PONGED!", this.canvas.width / 2, this.canvas.height / 2 - 50 * s);
 
             this.ctx.fillStyle = '#fff';
-            this.ctx.font = 'bold 32px Inter, sans-serif';
-            this.ctx.fillText(`SURVIVED: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 10);
+            this.ctx.font = `bold ${32 * s}px Inter, sans-serif`;
+            this.ctx.fillText(`SURVIVED: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 10 * s);
 
-            this.ctx.font = '24px Inter, sans-serif';
+            this.ctx.font = `${24 * s}px Inter, sans-serif`;
             // this.ctx.fillText(`Restarting in ${Math.ceil(this.scoreDisplayTimer)}...`, this.canvas.width / 2, this.canvas.height / 2 + 60);
-            this.ctx.fillText(`CLICK OR PRESS SPACE TO RESTART`, this.canvas.width / 2, this.canvas.height / 2 + 60);
+            this.ctx.fillText(`CLICK OR PRESS SPACE TO RESTART`, this.canvas.width / 2, this.canvas.height / 2 + 60 * s);
         } else if (this.gameState === 'TERMINATED') {
             // Game terminated overlay (player left, etc.)
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
@@ -696,20 +702,20 @@ export class Game {
             this.ctx.fillStyle = '#ef4444'; // Red color for termination
             this.ctx.shadowColor = '#ef4444';
             this.ctx.shadowBlur = 20;
-            this.ctx.font = 'bold 48px Inter, sans-serif';
+            this.ctx.font = `bold ${48 * s}px Inter, sans-serif`;
             this.ctx.textAlign = 'center';
-            this.ctx.fillText("GAME ENDED", this.canvas.width / 2, this.canvas.height / 2 - 50);
+            this.ctx.fillText("GAME ENDED", this.canvas.width / 2, this.canvas.height / 2 - 50 * s);
 
             this.ctx.fillStyle = '#fff';
-            this.ctx.font = 'bold 28px Inter, sans-serif';
-            this.ctx.fillText(this.terminationReason || 'A player disconnected', this.canvas.width / 2, this.canvas.height / 2 + 10);
+            this.ctx.font = `bold ${28 * s}px Inter, sans-serif`;
+            this.ctx.fillText(this.terminationReason || 'A player disconnected', this.canvas.width / 2, this.canvas.height / 2 + 10 * s);
 
-            this.ctx.font = '24px Inter, sans-serif';
-            this.ctx.fillText(`FINAL SCORE: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 60);
+            this.ctx.font = `${24 * s}px Inter, sans-serif`;
+            this.ctx.fillText(`FINAL SCORE: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 60 * s);
 
             this.ctx.fillStyle = '#94a3b8';
-            this.ctx.font = '20px Inter, sans-serif';
-            this.ctx.fillText('CLICK OR PRESS SPACE TO REJOIN', this.canvas.width / 2, this.canvas.height / 2 + 110);
+            this.ctx.font = `${20 * s}px Inter, sans-serif`;
+            this.ctx.fillText('CLICK OR PRESS SPACE TO REJOIN', this.canvas.width / 2, this.canvas.height / 2 + 110 * s);
         }
     }
 }
