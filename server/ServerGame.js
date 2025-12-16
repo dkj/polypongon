@@ -128,7 +128,7 @@ export class ServerGame {
         this.polygon.update(dt);
 
         const currentSpeed = Math.sqrt(this.ball.vx ** 2 + this.ball.vy ** 2);
-        const targetSpeed = 200 * this.difficulty;
+        const targetSpeed = 200 * (this.difficulty ** 0.5);
         if (currentSpeed < targetSpeed) {
             const scale = targetSpeed / currentSpeed;
             this.ball.vx *= scale;
@@ -312,8 +312,8 @@ export class ServerGame {
         this.ball.x += nx * 2;
         this.ball.y += ny * 2;
 
-        this.ball.vx *= 1.05;
-        this.ball.vy *= 1.05;
+        this.ball.vx *= 1.0125;
+        this.ball.vy *= 1.0125;
     }
 
     resetBall() {
