@@ -3,7 +3,7 @@ export class Polygon {
         this.radius = radius;
         this.sides = sides;
         this.rotation = 0;
-        this.rotationSpeed = 0.5;
+        this.rotationSpeed = 0.125;
         this.vertices = [];
         this.updateVertices();
     }

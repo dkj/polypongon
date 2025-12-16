@@ -8,7 +8,7 @@ document.querySelector('#app').innerHTML = `
     <h1 style="margin: 0; font-weight: 600;">POLYPONGON</h1>
     ${import.meta.env.VITE_STATIC_BUILD === 'true' ? '' : `
     <button id="onlineBtn" style="margin-top: 10px; padding: 10px 20px; background: #38bdf8; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-      PLAY ONLINE
+      multiplayer (go online)
     </button>
     `}
   </div>
@@ -38,7 +38,9 @@ const roomFromUrl = urlParams.get('room');
 // If room in URL, auto-join
 if (roomFromUrl) {
   console.log('Auto-joining room:', roomFromUrl);
-  document.getElementById('onlineBtn').style.display = 'none';
+  // document.getElementById('onlineBtn').style.display = 'none'; // Don't hide, update text
+  const btn = document.getElementById('onlineBtn');
+  if (btn) btn.innerText = 'go offline (single player)';
   game.startMultiplayer(roomFromUrl);
   showQRCode(window.location.href);
 }
@@ -46,16 +48,34 @@ if (roomFromUrl) {
 const onlineBtn = document.getElementById('onlineBtn');
 if (onlineBtn) {
   onlineBtn.addEventListener('click', () => {
-    const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
-    console.log('Online button clicked! Created room:', roomId);
+    if (game.mode === 'online') {
+      // Switch to Offline
+      console.log('Switching to Offline Mode');
+      game.stopMultiplayer();
 
-    // Update URL without reload
-    const newUrl = `${window.location.pathname}?room=${roomId}`;
-    window.history.pushState({ path: newUrl }, '', newUrl);
+      // Clear URL
+      const newUrl = window.location.pathname;
+      window.history.pushState({ path: newUrl }, '', newUrl);
 
-    game.startMultiplayer(roomId);
-    showQRCode(window.location.href);
+      // Hide QR
+      const container = document.getElementById('qr-container');
+      container.style.display = 'none';
 
-    onlineBtn.style.display = 'none';
+      // Update Button
+      onlineBtn.innerText = 'multiplayer (go online)';
+    } else {
+      // Switch to Online
+      const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
+      console.log('Online button clicked! Created room:', roomId);
+
+      // Update URL without reload
+      const newUrl = `${window.location.pathname}?room=${roomId}`;
+      window.history.pushState({ path: newUrl }, '', newUrl);
+
+      game.startMultiplayer(roomId);
+      showQRCode(window.location.href);
+
+      onlineBtn.innerText = 'go offline (single player)';
+    }
   });
 }

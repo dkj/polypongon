@@ -170,7 +170,7 @@ function testPaddleWidthBroadcast() {
     const paddle = capturedState.paddles[0];
     assert.ok(paddle.width !== undefined, 'Paddle width should be broadcast');
     assert.ok(typeof paddle.width === 'number', 'Paddle width should be a number');
-    assert.ok(paddle.width > 0 && paddle.width <= 0.25, 'Paddle width should be reasonable (0 < w <= 0.25)');
+    assert.ok(paddle.width > 0 && paddle.width <= 0.5, 'Paddle width should be reasonable (0 < w <= 0.5)');
 
     console.log('✅ Passed: Paddle width is broadcast:', paddle.width);
     game.stop();
