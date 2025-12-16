@@ -117,7 +117,7 @@ export class Game {
         // Randomize rotation direction: 1 or -1
         this.rotationDirection = Math.random() < 0.5 ? 1 : -1;
         this.polygon.rotationSpeed = 0.125 * this.rotationDirection;
-        this.paddles.forEach(p => p.width = 0.2);
+        this.paddles.forEach(p => p.width = 0.5);
     }
 
     startMultiplayer(roomId) {
@@ -351,7 +351,7 @@ export class Game {
                 if (!myPaddle) myPaddle = new Paddle(pData1.edgeIndex);
 
                 // Update width from server (gameplay sync)
-                myPaddle.width = pData1.width ?? Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+                myPaddle.width = pData1.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
 
                 // RECONCILIATION: Blend predicted position towards server position
                 // This prevents drift while still allowing responsive local movement
@@ -378,7 +378,7 @@ export class Game {
                 p.position = pData1.position; // No history, snap to target
             }
 
-            p.width = pData1.width ?? Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+            p.width = pData1.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
             return p;
         });
     }
@@ -413,7 +413,7 @@ export class Game {
 
         this.ball.update(dt);
 
-        const targetWidth = Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+        const targetWidth = Math.max(0.1, 0.4 / (this.difficulty * 0.8));
         this.paddles.forEach(p => p.width = targetWidth);
 
         let dir = 0;

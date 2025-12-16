@@ -138,7 +138,7 @@ export class ServerGame {
         this.ball.update(dt);
 
         // Update Paddles
-        const targetWidth = Math.max(0.1, 0.2 / (this.difficulty * 0.8));
+        const targetWidth = Math.max(0.1, 0.4 / (this.difficulty * 0.8));
         this.paddles.forEach(p => {
             p.width = targetWidth;
             if (p.moveDirection) {
@@ -352,7 +352,7 @@ export class ServerGame {
         this.rotationDirection = Math.random() < 0.5 ? 1 : -1;
         this.polygon.rotationSpeed = 0.125 * this.rotationDirection;
         this.paddles.forEach(p => {
-            p.width = 0.2;
+            p.width = 0.5;
             p.position = 0.5; // Reset to center
             p.moveDirection = 0; // Clear any pending movement
         });
