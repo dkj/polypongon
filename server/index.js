@@ -5,12 +5,7 @@ import { ServerGame } from './ServerGame.js';
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
+const io = new Server(httpServer);
 
 const games = new Map(); // roomId -> ServerGame
 
