@@ -25,7 +25,10 @@ test('Ball has a trail', async ({ page }) => {
     // In SCORING, update() returns early (Total Freeze).
 
     // So we MUST click to start.
-    await page.locator('body').click();
+    // The "Start / Restart" button should be visible.
+    const startBtn = page.locator('#restartBtn');
+    await expect(startBtn).toBeVisible();
+    await startBtn.click();
 
     // Wait for ball to move
     await page.waitForTimeout(1000);

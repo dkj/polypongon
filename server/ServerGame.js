@@ -21,7 +21,15 @@ export class ServerGame extends BaseGame {
     addPlayer(socketId) {
         if (this.paddles.length >= this.polygon.sides) return -1;
 
-        const edgeIndex = this.paddles.length;
+        // Find the first available edgeIndex
+        const occupiedIndices = new Set(this.paddles.map(p => p.edgeIndex));
+        let edgeIndex = 0;
+        while (occupiedIndices.has(edgeIndex) && edgeIndex < this.polygon.sides) {
+            edgeIndex++;
+        }
+
+        if (edgeIndex >= this.polygon.sides) return -1;
+
         const paddle = new Paddle(edgeIndex);
         this.paddles.push(paddle);
         this.players.set(socketId, edgeIndex);
@@ -48,7 +56,8 @@ export class ServerGame extends BaseGame {
 
         this.io.to(this.roomId).emit('gameTerminated', {
             reason: reason,
-            lastScore: Math.floor(this.score)
+            lastScore: this.score,
+            finalTime: Math.floor(this.timeElapsed)
         });
     }
 
@@ -112,24 +121,31 @@ export class ServerGame extends BaseGame {
 
     // --- Hooks ---
     onPaddleHit(edgeIndex) {
-        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce' });
+        super.onPaddleHit(edgeIndex);
+        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce', edgeIndex });
     }
 
     onWallBounce(edgeIndex) {
-        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce' });
+        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce', edgeIndex });
     }
 
     onGoal(edgeIndex) {
-        this.triggerScore(this.score);
+        this.triggerScore(this.score, edgeIndex);
     }
     // -------------
 
-    triggerScore(finalScore) {
+    triggerScore(finalScore, edgeIndex) {
         this.gameState = 'SCORING';
-        this.lastScore = Math.floor(finalScore);
+        this.lastScore = finalScore; // This is now bounce count
+        this.finalTime = Math.floor(this.timeElapsed);
         this.scoreDisplayTimer = 0;
 
-        this.io.to(this.roomId).emit('gameEvent', { type: 'goal', score: this.lastScore });
+        this.io.to(this.roomId).emit('gameEvent', {
+            type: 'goal',
+            score: this.lastScore,
+            time: this.finalTime,
+            edgeIndex
+        });
     }
 
     processRestart() {
@@ -159,6 +175,8 @@ export class ServerGame extends BaseGame {
             gameState: this.gameState,
             score: this.score,
             lastScore: this.lastScore,
+            finalTime: this.finalTime,
+            timeElapsed: this.timeElapsed,
             scoreDisplayTimer: this.scoreDisplayTimer,
             timestamp: Date.now()
         });

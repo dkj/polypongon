@@ -22,6 +22,8 @@ export class Game extends BaseGame {
         // UI State
         this.scoreDisplayTimer = 0;
         this.lastTime = 0;
+        this.finalTime = 0;
+        this.hasPlayed = false;
 
         window.addEventListener('resize', () => this.resize());
 
@@ -31,15 +33,7 @@ export class Game extends BaseGame {
             this.keys[e.code] = true;
             if ((e.code === 'Space' || e.code === 'Enter')) {
                 this.audio.init();
-                if (this.gameState === 'SCORING') {
-                    if (this.socket) {
-                        this.socket.emit('requestRestart');
-                    } else {
-                        this.resetLocalGame();
-                    }
-                } else if (this.gameState === 'TERMINATED' && this.socket) {
-                    this.rejoinMultiplayer();
-                }
+                this.handleRestartAction();
             }
         });
         window.addEventListener('keyup', (e) => this.keys[e.code] = false);
@@ -53,31 +47,100 @@ export class Game extends BaseGame {
         // Audio & Visual init
         const initAudio = () => {
             this.audio.init();
-            if (this.gameState === 'SCORING') {
-                if (this.socket) {
-                    this.socket.emit('requestRestart');
-                } else {
-                    this.resetLocalGame();
-                }
-            } else if (this.gameState === 'TERMINATED' && this.socket) {
-                this.rejoinMultiplayer();
-            }
+            // Note: We don't auto-restart on global click anymore, 
+            // relying on the specific button or space/enter key.
         };
         window.addEventListener('click', initAudio);
         window.addEventListener('touchstart', initAudio);
 
         this.flashTime = 0;
+
+        this.menuContainer = document.getElementById('game-menu');
+        this.restartBtn = document.getElementById('restartBtn');
+        if (this.restartBtn) {
+            this.restartBtn.addEventListener('click', (e) => {
+                this.audio.init();
+                this.handleRestartAction();
+            });
+        }
+
+        // Visual Effects
+        this.particles = [];
+        this.flashActive = false;
+        this.flashColor = '';
+
+        // Initial State
+        if (this.gameState === 'SCORING') {
+            this.showMenu('START GAME');
+        }
     }
 
-    flashEffect() {
-        this.flashTime = 0.2; // 200ms red flash
+    addParticles(x, y, color, count = 10) {
+        for (let i = 0; i < count; i++) {
+            this.particles.push({
+                x, y,
+                vx: (Math.random() - 0.5) * 400,
+                vy: (Math.random() - 0.5) * 400,
+                life: 1.0,
+                color: color,
+                size: Math.random() * 4 + 2
+            });
+        }
     }
 
-    triggerScore(finalScore) {
+    updateParticles(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt * 2;
+            if (p.life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+    }
+
+    showMenu(buttonText) {
+        if (this.menuContainer) {
+            this.menuContainer.style.display = 'flex';
+            if (this.restartBtn) {
+                this.restartBtn.innerText = buttonText;
+                this.restartBtn.focus();
+            }
+        }
+    }
+
+    hideMenu() {
+        if (this.menuContainer) {
+            this.menuContainer.style.display = 'none';
+        }
+    }
+
+    handleRestartAction() {
+        if (this.gameState === 'SCORING') {
+            if (this.socket) {
+                this.socket.emit('requestRestart');
+            } else {
+                this.resetLocalGame();
+            }
+        } else if (this.gameState === 'TERMINATED' && this.socket) {
+            this.rejoinMultiplayer();
+        }
+    }
+
+    flashEffect(color = 'rgba(239, 68, 68, 0.2)') {
+        this.flashActive = true;
+        this.flashColor = color;
+    }
+
+    triggerScore(finalScore, finalTime) {
         this.gameState = 'SCORING';
-        this.lastScore = Math.floor(finalScore);
+        this.lastScore = finalScore;
+        this.finalTime = finalTime ?? Math.floor(this.timeElapsed) ?? 0;
         this.scoreDisplayTimer = 5.0; // 5 seconds celebration
-        this.flashEffect();
+        this.hasPlayed = true;
+
+        this.showMenu('PLAY AGAIN');
 
         // Reset Difficulty
         this.difficulty = 1.0;
@@ -91,11 +154,11 @@ export class Game extends BaseGame {
         // BaseGame does NOT set paddle position or count.
         // We assume paddles array is managed. 
         // In local, we have 1 paddle.
-        if (this.paddles.length === 0) {
-            this.paddles = [new Paddle(0)];
-        }
-        // Ensure paddle is correct
+        // In local, we only have one paddle at edge 0.
+        this.paddles = [new Paddle(0)];
         this.paddles[0].width = 0.5;
+
+        this.hideMenu();
     }
 
     startMultiplayer(roomId) {
@@ -103,7 +166,9 @@ export class Game extends BaseGame {
         this.mode = 'online';
         this.socket = io({
             path: '/socket.io',
-            transports: ['websocket', 'polling']
+            transports: ['websocket', 'polling'],
+            forceNew: true,
+            multiplex: false
         });
 
         this.socket.on('connect', () => {
@@ -136,20 +201,41 @@ export class Game extends BaseGame {
             this.gameState = state.gameState;
             this.score = state.score;
             this.lastScore = state.lastScore;
-            this.scoreDisplayTimer = state.scoreDisplayTimer;
+            this.finalTime = state.finalTime || 0;
+            this.timeElapsed = state.timeElapsed || 0;
+            if (this.lastScore > 0 || this.finalTime > 0) {
+                this.hasPlayed = true;
+            }
             this.audio.setDifficulty(this.difficulty);
+
+            if (this.gameState === 'PLAYING') {
+                this.hideMenu();
+            } else if (this.gameState === 'SCORING') {
+                this.showMenu('PLAY AGAIN');
+            }
         });
 
         this.socket.on('gameEvent', (event) => {
-            if (event.type === 'bounce') this.audio.playBounce();
+            if (event.type === 'bounce') {
+                this.audio.playBounce();
+                if (event.edgeIndex !== undefined) {
+                    this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(event.edgeIndex));
+                }
+            }
             if (event.type === 'miss') {
                 this.audio.playBounce();
                 this.flashEffect();
             }
             if (event.type === 'goal') {
                 this.stateBuffer = [];
-                this.flashEffect();
+                this.flashEffect('rgba(239, 68, 68, 0.4)');
                 this.audio.playBounce();
+                if (event.edgeIndex !== undefined) {
+                    this.addParticles(this.ball.x, this.ball.y, '#ff4444', 20);
+                }
+                this.lastScore = event.score;
+                this.finalTime = event.time;
+                this.hasPlayed = true;
             }
         });
 
@@ -157,7 +243,10 @@ export class Game extends BaseGame {
             this.gameState = 'TERMINATED';
             this.terminationReason = data.reason;
             this.lastScore = data.lastScore;
+            this.finalTime = data.finalTime || 0;
             this.stateBuffer = [];
+
+            this.showMenu('REJOIN GAME');
         });
 
         this.currentRoomId = roomId;
@@ -205,6 +294,7 @@ export class Game extends BaseGame {
         this.centerY = this.canvas.height / 2;
         const minDim = Math.min(this.canvas.width, this.canvas.height);
         this.gameScale = minDim / 600;
+        document.documentElement.style.setProperty('--game-scale', this.gameScale);
     }
 
     start() {
@@ -221,6 +311,8 @@ export class Game extends BaseGame {
         } else {
             this.handleOnlineInput(dt);
         }
+
+        this.updateParticles(dt);
 
         this.draw();
 
@@ -259,16 +351,21 @@ export class Game extends BaseGame {
     // --- Hooks for BaseGame ---
 
     onPaddleHit(edgeIndex) {
+        super.onPaddleHit(edgeIndex);
         this.audio.playBounce();
+        this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(edgeIndex));
     }
 
     onWallBounce(edgeIndex) {
         this.audio.playBounce();
+        this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(edgeIndex), 5);
     }
 
     onGoal(edgeIndex) {
-        this.audio.playBounce(); // Fail sound?
-        this.triggerScore(this.score);
+        this.audio.playBounce();
+        this.flashEffect('rgba(239, 68, 68, 0.4)');
+        this.addParticles(this.ball.x, this.ball.y, '#ff4444', 20);
+        this.triggerScore(this.score, Math.floor(this.timeElapsed));
     }
 
     // --------------------------
@@ -425,6 +522,17 @@ export class Game extends BaseGame {
 
         this.ball.draw(this.ctx, 0, 0);
 
+        // Draw Particles
+        this.ctx.shadowBlur = 0;
+        this.particles.forEach(p => {
+            this.ctx.globalAlpha = p.life;
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+        this.ctx.globalAlpha = 1.0;
+
         this.ctx.restore();
 
         if (this.flashActive) {
@@ -435,42 +543,73 @@ export class Game extends BaseGame {
 
         const s = this.gameScale || 1;
         this.ctx.fillStyle = '#fff';
-        this.ctx.font = `${24 * s}px Inter, sans-serif`;
+        this.ctx.font = `600 ${20 * s}px 'Outfit', sans-serif`;
         this.ctx.textAlign = 'left';
 
         if (this.gameState === 'PLAYING') {
-            this.ctx.fillText(`Score: ${Math.floor(this.score)}`, 20 * s, 40 * s);
+            const timeStr = `TIME: ${Math.floor(this.timeElapsed || 0)}S`;
+            const scoreStr = `SCORE: ${this.score || 0}`;
+            const fullStr = `${scoreStr} | ${timeStr}`;
+
+            this.ctx.shadowBlur = 10;
+            this.ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+
+            if (s < 0.8) {
+                // Mobile: Center below the title
+                this.ctx.font = `600 ${16 * s}px 'Outfit', sans-serif`;
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(fullStr, this.canvas.width / 2, 70 * s);
+            } else {
+                // Desktop: Top Left
+                this.ctx.font = `600 ${20 * s}px 'Outfit', sans-serif`;
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(fullStr, 20 * s, 30 * s);
+            }
+            this.ctx.shadowBlur = 0;
         } else if (this.gameState === 'SCORING') {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             this.ctx.fillStyle = '#38bdf8';
             this.ctx.shadowColor = '#38bdf8';
             this.ctx.shadowBlur = 20;
-            this.ctx.font = `bold ${48 * s}px Inter, sans-serif`;
+            this.ctx.font = `800 ${64 * s}px 'Outfit', sans-serif`;
             this.ctx.textAlign = 'center';
-            this.ctx.fillText("YOU'VE BEEN PONGED!", this.canvas.width / 2, this.canvas.height / 2 - 50 * s);
-            this.ctx.fillStyle = '#fff';
-            this.ctx.font = `bold ${32 * s}px Inter, sans-serif`;
-            this.ctx.fillText(`SURVIVED: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 10 * s);
-            this.ctx.font = `${24 * s}px Inter, sans-serif`;
-            this.ctx.fillText(`CLICK OR PRESS SPACE TO RESTART`, this.canvas.width / 2, this.canvas.height / 2 + 60 * s);
+
+            if (this.hasPlayed) {
+                this.ctx.fillText("PONGED!", this.canvas.width / 2, this.canvas.height / 2 - 80 * s);
+                this.ctx.fillStyle = '#fff';
+                this.ctx.font = `600 ${32 * s}px 'Outfit', sans-serif`;
+                this.ctx.fillText(`SCORE: ${this.lastScore} | TIME: ${this.finalTime}S`, this.canvas.width / 2, this.canvas.height / 2 - 20 * s);
+            } else {
+                this.ctx.fillText("Anyone for Pong?", this.canvas.width / 2, this.canvas.height / 2 - 20 * s);
+            }
+            this.ctx.font = `400 ${24 * s}px 'Outfit', sans-serif`;
+            // this.ctx.fillText(`CLICK OR PRESS SPACE TO RESTART`, this.canvas.width / 2, this.canvas.height / 2 + 60 * s);
         } else if (this.gameState === 'TERMINATED') {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             this.ctx.fillStyle = '#ef4444';
             this.ctx.shadowColor = '#ef4444';
             this.ctx.shadowBlur = 20;
-            this.ctx.font = `bold ${48 * s}px Inter, sans-serif`;
+            this.ctx.font = `800 ${64 * s}px 'Outfit', sans-serif`;
             this.ctx.textAlign = 'center';
-            this.ctx.fillText("GAME ENDED", this.canvas.width / 2, this.canvas.height / 2 - 50 * s);
+            this.ctx.fillText("GAME OVER", this.canvas.width / 2, this.canvas.height / 2 - 80 * s);
             this.ctx.fillStyle = '#fff';
-            this.ctx.font = `bold ${28 * s}px Inter, sans-serif`;
-            this.ctx.fillText(this.terminationReason || 'A player disconnected', this.canvas.width / 2, this.canvas.height / 2 + 10 * s);
-            this.ctx.font = `${24 * s}px Inter, sans-serif`;
-            this.ctx.fillText(`FINAL SCORE: ${this.lastScore} SECONDS`, this.canvas.width / 2, this.canvas.height / 2 + 60 * s);
+            this.ctx.font = `600 ${28 * s}px 'Outfit', sans-serif`;
+            this.ctx.fillText(this.terminationReason || 'A player disconnected', this.canvas.width / 2, this.canvas.height / 2 - 20 * s);
+            this.ctx.font = `400 ${24 * s}px 'Outfit', sans-serif`;
+            this.ctx.fillText(`SCORE: ${this.lastScore} | TIME: ${this.finalTime}S`, this.canvas.width / 2, this.canvas.height / 2 + 20 * s);
             this.ctx.fillStyle = '#94a3b8';
-            this.ctx.font = `${20 * s}px Inter, sans-serif`;
-            this.ctx.fillText('CLICK OR PRESS SPACE TO REJOIN', this.canvas.width / 2, this.canvas.height / 2 + 110 * s);
+            this.ctx.font = `${20 * s}px 'Outfit', sans-serif`;
+            // this.ctx.fillText('CLICK OR PRESS SPACE TO REJOIN', this.canvas.width / 2, this.canvas.height / 2 + 110 * s);
+        }
+
+        // Multiplayer Debug Info
+        if (this.mode === 'online' && this.playerIndex !== -1 && this.gameState !== 'SCORING') {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            this.ctx.font = `${14 * s}px 'Outfit', sans-serif`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText(`ID: ${this.socket.id.substring(0, 4)} | P${this.playerIndex + 1}`, 20 * s, this.canvas.height - 20 * s);
         }
     }
 }

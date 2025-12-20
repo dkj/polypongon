@@ -5,14 +5,21 @@ import QRCode from 'qrcode';
 document.querySelector('#app').innerHTML = `
   <canvas id="gameCanvas"></canvas>
   <div class="ui-layer">
-    <h1 style="margin: 0; font-weight: 600;">POLYPONGON</h1>
+    <h1>POLYPONGON</h1>
+  </div>
+  
+  <div id="game-menu" class="menu-container">
+    <button id="restartBtn" class="btn btn-primary">
+      START GAME
+    </button>
     ${import.meta.env.VITE_STATIC_BUILD === 'true' ? '' : `
-    <button id="onlineBtn" style="margin-top: 10px; padding: 10px 20px; background: #38bdf8; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-      multiplayer (go online)
+    <button id="onlineBtn" class="btn btn-secondary">
+      MULTIPLAYER (GO ONLINE)
     </button>
     `}
   </div>
-  <div id="qr-container" style="position: absolute; top: 20px; right: 20px; display: none;">
+
+  <div id="qr-container">
     <canvas id="qrCanvas"></canvas>
   </div>
 `;
@@ -28,7 +35,7 @@ function showQRCode(url) {
 
   QRCode.toCanvas(canvas, url, { width: 180, margin: 4 }, function (error) {
     if (error) console.error(error);
-    container.style.display = 'block';
+    container.classList.add('visible');
   });
 }
 
@@ -59,10 +66,10 @@ if (onlineBtn) {
 
       // Hide QR
       const container = document.getElementById('qr-container');
-      container.style.display = 'none';
+      container.classList.remove('visible');
 
       // Update Button
-      onlineBtn.innerText = 'multiplayer (go online)';
+      onlineBtn.innerText = 'MULTIPLAYER (GO ONLINE)';
     } else {
       // Switch to Online
       const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -75,7 +82,7 @@ if (onlineBtn) {
       game.startMultiplayer(roomId);
       showQRCode(window.location.href);
 
-      onlineBtn.innerText = 'go offline (single player)';
+      onlineBtn.innerText = 'GO OFFLINE (SINGLE PLAYER)';
     }
   });
 }

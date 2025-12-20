@@ -58,13 +58,15 @@ io.on('connection', (socket) => {
     // Handle disconnect specifically for this room context
     socket.on('disconnect', () => {
       console.log('user disconnected', socket.id);
-      game.removePlayer(socket.id);
+      if (game) {
+        game.removePlayer(socket.id);
 
-      // Clean up the game if it's terminated or no players remain
-      if (game.gameState === 'TERMINATED' || game.players.size === 0) {
-        game.stop();
-        games.delete(roomId);
-        console.log(`Game for room ${roomId} cleaned up`);
+        // Clean up the game ONLY if no players remain
+        if (game.players.size === 0) {
+          game.stop();
+          games.delete(roomId);
+          console.log(`Game for room ${roomId} cleaned up (empty)`);
+        }
       }
     });
   });
