@@ -197,13 +197,16 @@ function testGoalEventIncludesScore() {
     game.io = captureIo;
 
     // Trigger a goal
-    game.triggerScore(7.5);
+    game.score = 12;
+    game.timeElapsed = 7.5;
+    game.triggerScore(12, 0); // 12 bounces, at edge 0
 
     assert.ok(goalEvent, 'Goal event should be emitted');
     assert.equal(goalEvent.type, 'goal', 'Event type should be goal');
-    assert.equal(goalEvent.score, 7, 'Score should be included (floored)');
+    assert.equal(goalEvent.score, 12, 'Score should be exactly 12');
+    assert.equal(goalEvent.time, 7, 'Time should be 7 (floored 7.5)');
 
-    console.log('✅ Passed: Goal event includes score.');
+    console.log('✅ Passed: Goal event includes score and time.');
     game.stop();
 }
 

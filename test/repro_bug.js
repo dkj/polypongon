@@ -40,7 +40,22 @@ global.window = {
     webkitAudioContext: class { }
 };
 global.document = {
-    addEventListener: () => { }
+    addEventListener: () => { },
+    documentElement: {
+        style: {
+            setProperty: () => { }
+        }
+    },
+    getElementById: () => ({
+        addEventListener: () => { },
+        style: {},
+        focus: () => { }
+    }),
+    querySelector: () => ({
+        getContext: () => ({}),
+        addEventListener: () => { },
+        style: {}
+    })
 };
 // Fake requestAnimationFrame
 global.requestAnimationFrame = (cb) => { }; // No op, we drive loop manually

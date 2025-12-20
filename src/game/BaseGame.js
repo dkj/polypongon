@@ -57,7 +57,6 @@ export class BaseGame {
         if (this.gameState === 'SCORING') return;
 
         this.timeElapsed += dt;
-        this.score += dt;
 
         this.difficulty = 1 + this.timeElapsed / GAME_CONSTANTS.DIFFICULTY_RAMP;
 
@@ -109,31 +108,38 @@ export class BaseGame {
 
                 const hasPaddle = this.paddles.some(p => p.edgeIndex === i);
 
-                let hitPaddle = false;
-                if (hasPaddle) {
-                    const paddle = this.paddles.find(p => p.edgeIndex === i);
-                    if (this.checkPaddleHit(checkPoint, p1, p2, paddle, GAME_CONSTANTS.COLLISION_GRACE)) {
-                        hitPaddle = true;
-                    }
+                // Check if ball is moving TOWARD this wall
+                // Normal points inward, so moving out means dot(v, n) < 0
+                let nx = -(p2.y - p1.y);
+                let ny = (p2.x - p1.x);
+                const len = Math.sqrt(nx * nx + ny * ny);
+                nx /= len; ny /= len;
+                if (nx * (-(p1.x + p2.x) / 2) + ny * (-(p1.y + p2.y) / 2) < 0) {
+                    nx = -nx; ny = -ny;
                 }
+                const dot = this.ball.vx * nx + this.ball.vy * ny;
 
-                if (hitPaddle) {
-                    this.reflectBall(p1, p2);
-                    this.pushBallOut(p1, p2);
-                    this.onPaddleHit(i);
-                    collided = true;
-                } else if (hasPaddle) {
-                    // Has paddle but missed it -> Goal
-                    // NOTE: Subclass decides if it wants to bounce audio or just end game.
-                    // Usually we don't bounce off the invisible goal line.
-                    this.onGoal(i); // Pass edge index
-                    return; // Stop checking
-                } else {
-                    // Normal wall bounce
-                    this.reflectBall(p1, p2);
-                    this.pushBallOut(p1, p2);
-                    this.onWallBounce(i);
-                    collided = true;
+                if (dot < 0) { // Only collide if moving OUTWARD
+                    let hitPaddle = false;
+                    if (hasPaddle) {
+                        const paddle = this.paddles.find(p => p.edgeIndex === i);
+                        if (this.checkPaddleHit(checkPoint, p1, p2, paddle, GAME_CONSTANTS.COLLISION_GRACE)) {
+                            hitPaddle = true;
+                        }
+                    }
+
+                    if (hitPaddle) {
+                        this.reflectBall(p1, p2);
+                        this.onPaddleHit(i);
+                        collided = true;
+                    } else if (hasPaddle) {
+                        this.onGoal(i);
+                        return;
+                    } else {
+                        this.reflectBall(p1, p2);
+                        this.onWallBounce(i);
+                        collided = true;
+                    }
                 }
             }
             if (collided) break;
@@ -141,7 +147,9 @@ export class BaseGame {
     }
 
     // Hooks for interaction/audio/networking
-    onPaddleHit(edgeIndex) { }
+    onPaddleHit(edgeIndex) {
+        this.score++;
+    }
     onWallBounce(edgeIndex) { }
     onGoal(edgeIndex) { }
 
@@ -154,7 +162,7 @@ export class BaseGame {
         nx /= len;
         ny /= len;
 
-        // Ensure normal points INWARD (if polygon is centered at 0,0)
+        // Ensure normal points INWARD
         if (nx * (-mx) + ny * (-my) < 0) {
             nx = -nx;
             ny = -ny;
@@ -164,23 +172,15 @@ export class BaseGame {
         this.ball.vx = this.ball.vx - 2 * dot * nx;
         this.ball.vy = this.ball.vy - 2 * dot * ny;
 
-        // Push along normal immediately as part of reflection
-        this.ball.x += nx * 2;
-        this.ball.y += ny * 2;
+        // Push along normal to prevent immediate re-collision
+        this.ball.x += nx * 4;
+        this.ball.y += ny * 4;
 
         this.ball.vx *= GAME_CONSTANTS.BALL_SPEED_INCREASE;
         this.ball.vy *= GAME_CONSTANTS.BALL_SPEED_INCREASE;
     }
 
-    pushBallOut(p1, p2) {
-        let nx = -(p2.y - p1.y);
-        let ny = (p2.x - p1.x);
-        const len = Math.sqrt(nx * nx + ny * ny);
-        nx /= len;
-        ny /= len;
-        this.ball.x += nx * 2;
-        this.ball.y += ny * 2;
-    }
+
 
     // --- Geometry Helpers ---
 
