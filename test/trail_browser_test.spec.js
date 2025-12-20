@@ -30,8 +30,11 @@ test('Ball has a trail', async ({ page }) => {
     await expect(startBtn).toBeVisible();
     await startBtn.click();
 
-    // Wait for ball to move
-    await page.waitForTimeout(1000);
+    // Wait for countdown (3s) to finish and actual gameplay to move ball
+    await page.waitForFunction(() => window.game.gameState === 'PLAYING', { timeout: 10000 });
+
+    // Wait a few more frames for trail to populate
+    await page.waitForTimeout(500);
 
     // 5. Evaluate trail length
     const trailLength = await page.evaluate(() => {

@@ -63,6 +63,7 @@ function testRemainingPlayerControl() {
     assert.equal(paddle2.moveDirection, moveDir, 'Input should be applied to Player 2 paddle');
 
     console.log('✅ Passed: Remaining player (P2) can control paddle after P1 left.');
+    game.stop();
 }
 
 function testSparseArrayHandling() {
@@ -95,6 +96,7 @@ function testSparseArrayHandling() {
     assert.equal(p3.moveDirection, -1, 'Player 3 input should work despite sparse indices');
 
     console.log('✅ Passed: Sparse paddle indices handled correctly.');
+    game.stop();
 }
 
 try {

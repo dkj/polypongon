@@ -8,5 +8,6 @@ export const GAME_CONSTANTS = {
     PADDLE_WIDTH_DIFFICULTY_FACTOR: 0.8,
     BALL_RADIUS: 5, // Indirectly used, maybe
     COLLISION_GRACE: 1.1,
-    GAME_FPS: 60
+    GAME_FPS: 60,
+    COUNTDOWN_DURATION: 3
 };

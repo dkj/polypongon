@@ -106,8 +106,10 @@ export class ServerGame extends BaseGame {
 
         super.updateGameRules(dt);
 
-        // Move Ball
-        this.ball.update(dt);
+        if (this.gameState === 'PLAYING') {
+            // Move Ball
+            this.ball.update(dt);
+        }
 
         // Update Paddles Movement (Server specific)
         this.paddles.forEach(p => {
@@ -116,7 +118,9 @@ export class ServerGame extends BaseGame {
             }
         });
 
-        super.checkCollisions(prevBallX, prevBallY);
+        if (this.gameState === 'PLAYING') {
+            super.checkCollisions(prevBallX, prevBallY);
+        }
     }
 
     // --- Hooks ---
@@ -178,6 +182,7 @@ export class ServerGame extends BaseGame {
             finalTime: this.finalTime,
             timeElapsed: this.timeElapsed,
             scoreDisplayTimer: this.scoreDisplayTimer,
+            countdownTimer: this.countdownTimer,
             timestamp: Date.now()
         });
     }

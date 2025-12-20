@@ -17,13 +17,15 @@ export class BaseGame {
         this.timeElapsed = 0;
         this.difficulty = 1.0;
         this.rotationDirection = 1;
+        this.countdownTimer = 0;
     }
 
     /**
      * Standard reset logic for starting a new round
      */
     resetState() {
-        this.gameState = 'PLAYING';
+        this.gameState = 'COUNTDOWN';
+        this.countdownTimer = GAME_CONSTANTS.COUNTDOWN_DURATION || 3;
         this.resetBall();
         this.difficulty = 1.0;
         this.score = 0;
@@ -55,6 +57,15 @@ export class BaseGame {
      */
     updateGameRules(dt) {
         if (this.gameState === 'SCORING') return;
+
+        if (this.gameState === 'COUNTDOWN') {
+            this.countdownTimer -= dt;
+            if (this.countdownTimer <= 0) {
+                this.gameState = 'PLAYING';
+                this.countdownTimer = 0;
+            }
+            return;
+        }
 
         this.timeElapsed += dt;
 

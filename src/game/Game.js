@@ -206,10 +206,13 @@ export class Game extends BaseGame {
             }
             this.audio.setDifficulty(this.difficulty);
 
-            if (this.gameState === 'PLAYING') {
+            if (this.gameState === 'PLAYING' || this.gameState === 'COUNTDOWN') {
                 this.hideMenu();
             } else if (this.gameState === 'SCORING') {
                 this.showMenu('PLAY AGAIN');
+            }
+            if (state.countdownTimer !== undefined) {
+                this.countdownTimer = state.countdownTimer;
             }
         });
 
@@ -338,8 +341,10 @@ export class Game extends BaseGame {
         // Local specific: Update audio difficulty
         this.audio.setDifficulty(this.difficulty);
 
-        // Move Ball
-        this.ball.update(dt);
+        if (this.gameState === 'PLAYING') {
+            // Move Ball
+            this.ball.update(dt);
+        }
 
         // Handle Input (Local Paddle)
         let dir = 0;
@@ -351,8 +356,10 @@ export class Game extends BaseGame {
             this.paddles[0].move(dir, dt);
         }
 
-        // Check Collisions
-        super.checkCollisions(prevBallX, prevBallY);
+        if (this.gameState === 'PLAYING') {
+            // Check Collisions
+            super.checkCollisions(prevBallX, prevBallY);
+        }
     }
 
     // --- Hooks for BaseGame ---
@@ -609,6 +616,16 @@ export class Game extends BaseGame {
             this.ctx.fillStyle = '#94a3b8';
             this.ctx.font = `${20 * s}px 'Outfit', sans-serif`;
             // this.ctx.fillText('CLICK OR PRESS SPACE TO REJOIN', this.canvas.width / 2, this.canvas.height / 2 + 110 * s);
+        } else if (this.gameState === 'COUNTDOWN') {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.fillStyle = '#fff';
+            this.ctx.shadowColor = '#fff';
+            this.ctx.shadowBlur = 20;
+            this.ctx.font = `800 ${120 * s}px 'Outfit', sans-serif`;
+            this.ctx.textAlign = 'center';
+            const count = Math.ceil(this.countdownTimer);
+            this.ctx.fillText(count > 0 ? count : "GO!", this.canvas.width / 2, this.canvas.height / 2 + 40 * s);
         }
 
         // Multiplayer Debug Info

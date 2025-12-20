@@ -48,8 +48,8 @@ function testFreezeAndRestart() {
     console.log('Triggering manual restart...');
     game.processRestart();
 
-    if (game.gameState !== 'PLAYING') {
-        console.error('❌ Failed: Game did not switch to PLAYING after restart.');
+    if (game.gameState !== 'COUNTDOWN') {
+        console.error('❌ Failed: Game did not switch to COUNTDOWN after restart.');
         process.exit(1);
     }
 
@@ -84,8 +84,8 @@ function testMultiplayerFreezeAndRestart() {
     console.log('Simulating P2 clicking restart...');
     game.processRestart();
 
-    if (game.gameState !== 'PLAYING') {
-        console.error('❌ Failed: P2 restart request did not restart normal gameplay.');
+    if (game.gameState !== 'COUNTDOWN') {
+        console.error('❌ Failed: P2 restart request did not restart into COUNTDOWN.');
         process.exit(1);
     }
 
@@ -127,8 +127,15 @@ function testGameStartsFrozen() {
     // 4. Player triggers restart - game should start
     game.processRestart();
 
-    assert.equal(game.gameState, 'PLAYING', 'Game should switch to PLAYING after restart');
-    console.log('✅ Passed: Game started after manual restart.');
+    assert.equal(game.gameState, 'COUNTDOWN', 'Game should switch to COUNTDOWN after restart');
+    console.log('✅ Passed: Game moved to COUNTDOWN after manual restart.');
+
+    // 4.5 Advance time to finish countdown
+    for (let i = 0; i < 200; i++) { // ~3.2s
+        game.update(0.016);
+    }
+    assert.equal(game.gameState, 'PLAYING', 'Game should switch to PLAYING after countdown');
+    console.log('✅ Passed: Game started after countdown.');
 
     // 5. Now updates should affect physics
     game.update(0.1);
@@ -143,7 +150,8 @@ function testPaddleWidthBroadcast() {
     const game = new ServerGame(mockIo, 'test_room_width');
     game.addPlayer('p1');
     game.start();
-    game.processRestart(); // Start playing
+    game.processRestart(); // Start countdown
+    for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     // Simulate some time passing to change difficulty/width
     for (let i = 0; i < 60; i++) {
@@ -224,7 +232,8 @@ function testPlayerDisconnectTerminatesGame() {
     game.addPlayer('p1');
     game.addPlayer('p2');
     game.start();
-    game.processRestart(); // Start playing
+    game.processRestart(); // Start countdown
+    for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     assert.equal(game.gameState, 'PLAYING', 'Game should be playing');
     assert.equal(game.players.size, 2, 'Should have 2 players');
@@ -246,6 +255,7 @@ function testDisconnectRemovesPaddle() {
     game.addPlayer('p2');
     game.start();
     game.processRestart();
+    for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     assert.equal(game.paddles.length, 2, 'Should start with 2 paddles');
 
@@ -283,9 +293,10 @@ function testDisconnectEmitsTerminatedEvent() {
     game.addPlayer('p2');
     game.start();
     game.processRestart();
+    for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
-    // Simulate some game time
-    for (let i = 0; i < 60; i++) {
+    // Simulate a bit of game time, but not enough to score a goal (total time < 1.0s)
+    for (let i = 0; i < 10; i++) {
         game.update(0.016);
     }
 
@@ -307,6 +318,7 @@ function testDisconnectDuringScoring() {
     game.addPlayer('p2');
     game.start();
     game.processRestart();
+    for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     // Trigger a goal - game should be in SCORING state
     game.triggerScore(5);
@@ -328,6 +340,7 @@ function testDisconnectNonExistentPlayer() {
     game.addPlayer('p1');
     game.start();
     game.processRestart();
+    for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     const initialState = game.gameState;
     const initialPaddleCount = game.paddles.length;
