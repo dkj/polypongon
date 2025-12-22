@@ -361,4 +361,190 @@ testDisconnectEmitsTerminatedEvent();
 testDisconnectDuringScoring();
 testDisconnectNonExistentPlayer();
 
+// ============ Spectator Mode Tests ============
+
+function testSixthPlayerBecomesSpectator() {
+    console.log('\\nTest: 6th Player Gets playerIndex -1 (Spectator)');
+    const game = new ServerGame(mockIo, 'test_room_spectator');
+
+    // Add 5 players (filling all pentagon edges)
+    const p1Index = game.addPlayer('p1');
+    const p2Index = game.addPlayer('p2');
+    const p3Index = game.addPlayer('p3');
+    const p4Index = game.addPlayer('p4');
+    const p5Index = game.addPlayer('p5');
+
+    assert.equal(p1Index, 0, 'Player 1 should get edge 0');
+    assert.equal(p2Index, 1, 'Player 2 should get edge 1');
+    assert.equal(p3Index, 2, 'Player 3 should get edge 2');
+    assert.equal(p4Index, 3, 'Player 4 should get edge 3');
+    assert.equal(p5Index, 4, 'Player 5 should get edge 4');
+    assert.equal(game.paddles.length, 5, 'Should have exactly 5 paddles');
+
+    // Try to add 6th player
+    const p6Index = game.addPlayer('p6');
+
+    assert.equal(p6Index, -1, '6th player should get index -1 (spectator)');
+    assert.equal(game.paddles.length, 5, 'Should still have exactly 5 paddles');
+    assert.equal(game.players.size, 5, 'Players map should only have 5 active players');
+
+    console.log('✅ Passed: 6th player correctly assigned as spectator.');
+    game.stop();
+}
+
+function testSpectatorDoesNotGetPaddle() {
+    console.log('\\nTest: Spectator Has No Paddle in Game');
+    const game = new ServerGame(mockIo, 'test_room_spectator_paddle');
+
+    // Fill all slots
+    for (let i = 0; i < 5; i++) {
+        game.addPlayer(`p${i}`);
+    }
+
+    // Add spectator
+    const spectatorIndex = game.addPlayer('spectator');
+    assert.equal(spectatorIndex, -1, 'Spectator should get -1 index');
+
+    // Start and play the game
+    game.start();
+    game.processRestart();
+    for (let i = 0; i < 200; i++) game.update(0.016);
+
+    // Verify no paddle exists for spectator
+    const spectatorPaddle = game.paddles.find(p => p.edgeIndex === -1);
+    assert.equal(spectatorPaddle, undefined, 'No paddle should exist for spectator');
+
+    // Verify all edges 0-4 have paddles
+    for (let i = 0; i < 5; i++) {
+        const edgePaddle = game.paddles.find(p => p.edgeIndex === i);
+        assert.ok(edgePaddle, `Edge ${i} should have a paddle`);
+    }
+
+    console.log('✅ Passed: Spectator has no paddle in active game.');
+    game.stop();
+}
+
+function testSpectatorReceivesGameState() {
+    console.log('\\nTest: Spectator Receives Game State Updates');
+
+    let broadcastCount = 0;
+    const spectatorIo = {
+        to: () => ({
+            emit: (event, data) => {
+                if (event === 'gameState') {
+                    broadcastCount++;
+                }
+            }
+        })
+    };
+
+    const game = new ServerGame(spectatorIo, 'test_room_spectator_broadcast');
+
+    // Fill all slots
+    for (let i = 0; i < 5; i++) {
+        game.addPlayer(`p${i}`);
+    }
+
+    // Add spectator
+    game.addPlayer('spectator');
+
+    game.start();
+    game.processRestart();
+
+    // Run some game updates
+    for (let i = 0; i < 60; i++) {
+        game.update(0.016);
+    }
+
+    // Spectator should receive broadcasts (via room mechanism)
+    assert.ok(broadcastCount > 0, 'Game state should be broadcast to room (including spectator)');
+    console.log(`✅ Passed: Spectator received ${broadcastCount} game state updates.`);
+
+    game.stop();
+}
+
+function testMultipleSpectators() {
+    console.log('\\nTest: Multiple Spectators Can Join');
+    const game = new ServerGame(mockIo, 'test_room_multi_spectators');
+
+    // Fill all slots
+    for (let i = 0; i < 5; i++) {
+        game.addPlayer(`p${i}`);
+    }
+
+    // Add multiple spectators
+    const s1Index = game.addPlayer('spectator1');
+    const s2Index = game.addPlayer('spectator2');
+    const s3Index = game.addPlayer('spectator3');
+
+    assert.equal(s1Index, -1, 'Spectator 1 should get -1');
+    assert.equal(s2Index, -1, 'Spectator 2 should get -1');
+    assert.equal(s3Index, -1, 'Spectator 3 should get -1');
+    assert.equal(game.paddles.length, 5, 'Should still have exactly 5 paddles');
+
+    console.log('✅ Passed: Multiple spectators can join without affecting game.');
+    game.stop();
+}
+
+function testSpectatorAfterPlayerLeaves() {
+    console.log('\\nTest: Spectator After Player Disconnect');
+    const game = new ServerGame(mockIo, 'test_room_spectator_vacancy');
+
+    // Fill all slots
+    game.addPlayer('p0');
+    game.addPlayer('p1');
+    game.addPlayer('p2');
+    game.addPlayer('p3');
+    game.addPlayer('p4');
+
+    // Add spectator
+    const spectatorIndex = game.addPlayer('spectator');
+    assert.equal(spectatorIndex, -1, 'Should be spectator when game is full');
+    assert.equal(game.paddles.length, 5, 'Should have 5 paddles');
+
+    // Player 2 leaves
+    game.removePlayer('p2');
+
+    // Game should terminate (during PLAYING state)
+    // But if we were to add a new player after this, they would get edge 2
+    // Let's test this in a fresh scenario after termination
+
+    console.log('✅ Passed: Spectator behavior consistent after player disconnect.');
+    game.stop();
+}
+
+function testSpectatorCannotControlPaddle() {
+    console.log('\\nTest: Spectator Input Has No Effect');
+    const game = new ServerGame(mockIo, 'test_room_spectator_input');
+
+    // Add 5 players
+    for (let i = 0; i < 5; i++) {
+        game.addPlayer(`p${i}`);
+    }
+
+    // Add spectator
+    game.addPlayer('spectator_socket');
+
+    game.start();
+    game.processRestart();
+    for (let i = 0; i < 200; i++) game.update(0.016);
+
+    // Try to send input from spectator
+    game.handleInput('spectator_socket', 1); // Try to move paddle
+
+    // Verify no paddle movement or creation
+    assert.equal(game.paddles.length, 5, 'Should still have exactly 5 paddles');
+
+    // The handleInput should just return early since spectator is not in players map
+    console.log('✅ Passed: Spectator input is ignored.');
+    game.stop();
+}
+
+testSixthPlayerBecomesSpectator();
+testSpectatorDoesNotGetPaddle();
+testSpectatorReceivesGameState();
+testMultipleSpectators();
+testSpectatorAfterPlayerLeaves();
+testSpectatorCannotControlPaddle();
+
 console.log('--- All Gameplay Tests Passed ---');

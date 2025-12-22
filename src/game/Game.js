@@ -635,5 +635,20 @@ export class Game extends BaseGame {
             this.ctx.textAlign = 'left';
             this.ctx.fillText(`ID: ${this.socket.id.substring(0, 4)} | P${this.playerIndex + 1}`, 20 * s, this.canvas.height - 20 * s);
         }
+
+        // Spectator Mode Indicator
+        if (this.mode === 'online' && this.playerIndex === -1 && this.socket) {
+            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+            this.ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+            this.ctx.shadowBlur = 15;
+            this.ctx.font = `600 ${24 * s}px 'Outfit', sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('SPECTATOR MODE', this.canvas.width / 2, this.canvas.height - 40 * s);
+
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            this.ctx.shadowBlur = 0;
+            this.ctx.font = `400 ${16 * s}px 'Outfit', sans-serif`;
+            this.ctx.fillText('All player slots are full', this.canvas.width / 2, this.canvas.height - 15 * s);
+        }
     }
 }
