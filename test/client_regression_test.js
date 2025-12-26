@@ -57,7 +57,7 @@ global.document = {
         style: {}
     })
 };
-global.requestAnimationFrame = (cb) => { };
+global.requestAnimationFrame = (_cb) => { };
 
 console.log('--- Starting Client Regression Tests ---');
 

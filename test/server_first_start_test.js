@@ -1,5 +1,4 @@
 import { ServerGame } from '../server/ServerGame.js';
-import { strict as assert } from 'assert';
 
 // Mock IO
 let emittedEvents = [];

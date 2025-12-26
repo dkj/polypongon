@@ -9,10 +9,6 @@ const mockIo = {
 
 console.log('--- Starting Physics Tests ---');
 
-function almostEqual(a, b, epsilon = 0.001) {
-    return Math.abs(a - b) < epsilon;
-}
-
 function testWallReflection() {
     console.log('Test: Wall Reflection');
     const game = new ServerGame(mockIo, 'test_room');
@@ -191,7 +187,7 @@ function testVertexCollision() {
 
     // It should hit EITHER wall 0 (Top) or wall 1 (Right).
     // The key is that it doesn't pass through or crash.
-    const reflected = (game.ball.vx < 0 && game.ball.vy < 0) || (game.ball.vx > 0 && game.ball.vy > 0);
+    (game.ball.vx < 0 && game.ball.vy < 0) || (game.ball.vx > 0 && game.ball.vy > 0);
     // Actually if it hits corner, it might reflect back (-vx, -vy) or glance off one side.
 
     // Simply check it's strictly inside the bounds or has reflected inward
@@ -239,7 +235,6 @@ function testInfiniteLineGlitch() {
 
     // We spy on 'reflectBall' or check if collided
     let reflected = false;
-    const originalReflect = game.reflectBall;
     game.reflectBall = () => { reflected = true; };
 
     game.checkCollisions(prevX, prevY);

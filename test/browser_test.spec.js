@@ -48,7 +48,6 @@ test('Physics - Ball Movement Visible', async ({ page }) => {
     await page.waitForTimeout(500);
 
     // Take a screenshot
-    const canvas = page.locator('canvas');
     // const box1 = await canvas.boundingBox();
 
     // Check pixel difference or just ensure it runs without crashing

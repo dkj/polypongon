@@ -430,7 +430,7 @@ function testSpectatorReceivesGameState() {
     let broadcastCount = 0;
     const spectatorIo = {
         to: () => ({
-            emit: (event, data) => {
+            emit: (event, _data) => {
                 if (event === 'gameState') {
                     broadcastCount++;
                 }

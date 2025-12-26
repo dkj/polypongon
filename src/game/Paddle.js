@@ -13,7 +13,7 @@ export class Paddle {
         this.position = Math.max(this.width / 2, Math.min(1 - this.width / 2, this.position));
     }
 
-    update(dt) {
+    update(_dt) {
         // AI or interpolation logic later
     }
 

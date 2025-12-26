@@ -1,6 +1,5 @@
 
 import { Game } from '../src/game/Game.js';
-import { BaseGame } from '../src/game/BaseGame.js';
 import { Paddle } from '../src/game/Paddle.js';
 
 // Mock Canvas
@@ -58,7 +57,7 @@ global.document = {
     })
 };
 // Fake requestAnimationFrame
-global.requestAnimationFrame = (cb) => { }; // No op, we drive loop manually
+global.requestAnimationFrame = (_cb) => { }; // No op, we drive loop manually
 
 console.log('--- Starting Repro Test ---');
 

@@ -25,9 +25,6 @@ async function testInstanceEndpointReturnsJSON() {
     const FLY_MACHINE_ID = 'test-machine-123';
     const instanceId = FLY_MACHINE_ID || 'local';
 
-    // Simulate the actual server setup (BEFORE the bug fix would be correct order)
-    const games = new Map();
-
     // API endpoints MUST come first
     app.get('/api/instance', (req, res) => {
         res.json({
@@ -301,7 +298,7 @@ async function testMultipleAPIEndpoints() {
         const test2 = await testCatchAllStillWorks();
         console.log();
 
-        console.log('Test 3: Verify Test Detects Wrong Route Order (Bug Simulation)');
+        console.log('Test 3: Verify Test Detects Wrong Order (Bug Simulation)');
         const test3 = await testWrongOrderWouldFail();
         console.log();
 

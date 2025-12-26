@@ -1,6 +1,5 @@
 import { Polygon } from './Polygon.js';
 import { Ball } from './Ball.js';
-import { Paddle } from './Paddle.js';
 import { GAME_CONSTANTS } from './Constants.js';
 
 export class BaseGame {
@@ -158,11 +157,11 @@ export class BaseGame {
     }
 
     // Hooks for interaction/audio/networking
-    onPaddleHit(edgeIndex) {
+    onPaddleHit(_edgeIndex) {
         this.score++;
     }
-    onWallBounce(edgeIndex) { }
-    onGoal(edgeIndex) { }
+    onWallBounce(_edgeIndex) { }
+    onGoal(_edgeIndex) { }
 
     reflectBall(p1, p2) {
         const mx = (p1.x + p2.x) / 2;

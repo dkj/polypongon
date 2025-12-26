@@ -56,7 +56,7 @@ export class Game extends BaseGame {
         this.menuContainer = document.getElementById('game-menu');
         this.restartBtn = document.getElementById('restartBtn');
         if (this.restartBtn) {
-            this.restartBtn.addEventListener('click', (e) => {
+            this.restartBtn.addEventListener('click', (_e) => {
                 this.audio.init();
                 this.handleRestartAction();
             });
@@ -413,7 +413,7 @@ export class Game extends BaseGame {
         this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(edgeIndex), 5);
     }
 
-    onGoal(edgeIndex) {
+    onGoal(_edgeIndex) {
         this.audio.playBounce();
         this.flashEffect('rgba(239, 68, 68, 0.4)');
         this.addParticles(this.ball.x, this.ball.y, '#ff4444', 20);
