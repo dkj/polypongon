@@ -1,5 +1,3 @@
-import { Polygon } from './Polygon.js';
-import { Ball } from './Ball.js';
 import { Paddle } from './Paddle.js';
 import { AudioManager } from './Audio.js';
 import { BaseGame } from './BaseGame.js';

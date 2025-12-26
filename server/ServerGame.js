@@ -1,5 +1,3 @@
-import { Polygon } from '../src/game/Polygon.js';
-import { Ball } from '../src/game/Ball.js';
 import { Paddle } from '../src/game/Paddle.js';
 import { BaseGame } from '../src/game/BaseGame.js';
 import { GAME_CONSTANTS } from '../src/game/Constants.js';
