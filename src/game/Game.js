@@ -165,19 +165,30 @@ export class Game extends BaseGame {
         this.hideMenu();
     }
 
-    startMultiplayer(roomId) {
+    startMultiplayer(roomId, instanceId = null) {
         console.log('Attempting to connect to server...');
         this.mode = 'online';
+
+        // Build query parameters for instance routing
+        const query = {};
+        if (instanceId) {
+            query.instance = instanceId;
+            console.log(`Connecting to instance: ${instanceId}`);
+        }
+
         this.socket = io({
             path: '/socket.io',
             transports: ['websocket', 'polling'],
             forceNew: true,
-            multiplex: false
+            multiplex: false,
+            query
         });
 
         this.socket.on('connect', () => {
             console.log('Connected to server successfully with ID:', this.socket.id);
-            this.socket.emit('joinRoom', roomId);
+            // Send instance info with room join request
+            const joinData = instanceId ? { roomId, instance: instanceId } : roomId;
+            this.socket.emit('joinRoom', joinData);
         });
 
         this.socket.on('connect_error', (err) => {
@@ -188,6 +199,9 @@ export class Game extends BaseGame {
             this.playerIndex = data.playerIndex;
             if (this.polygon.sides !== data.sides) {
                 this.polygon.updateSides(data.sides);
+            }
+            if (data.instanceId) {
+                console.log(`Confirmed connected to instance: ${data.instanceId}`);
             }
         });
 
@@ -254,7 +268,16 @@ export class Game extends BaseGame {
             this.showMenu('REJOIN GAME');
         });
 
+        this.socket.on('error', (error) => {
+            console.error('Socket error:', error);
+            if (error.message === 'Connected to wrong instance') {
+                console.error(`Instance mismatch: Expected ${error.expectedInstance}, got ${error.currentInstance}`);
+                // Could show user-facing error here
+            }
+        });
+
         this.currentRoomId = roomId;
+        this.currentInstanceId = instanceId;
     }
 
     stopMultiplayer() {
@@ -266,6 +289,7 @@ export class Game extends BaseGame {
         this.mode = 'local';
         this.playerIndex = -1;
         this.currentRoomId = null;
+        this.currentInstanceId = null;
 
         // Reset to initial menu state instead of immediately starting
         this.gameState = 'SCORING';
@@ -288,7 +312,7 @@ export class Game extends BaseGame {
         this.gameState = 'SCORING';
         this.terminationReason = null;
         this.stateBuffer = [];
-        this.startMultiplayer(this.currentRoomId);
+        this.startMultiplayer(this.currentRoomId, this.currentInstanceId);
     }
 
     handleTouch(e) {

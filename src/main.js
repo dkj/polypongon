@@ -39,22 +39,33 @@ function showQRCode(url) {
   });
 }
 
+// Helper function to fetch instance info from server
+async function getInstanceInfo() {
+  try {
+    const response = await fetch('/api/instance');
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch instance info:', error);
+    return { instanceId: null, isFlyInstance: false };
+  }
+}
+
 const urlParams = new URLSearchParams(window.location.search);
 const roomFromUrl = urlParams.get('room');
+const instanceFromUrl = urlParams.get('instance');
 
 // If room in URL, auto-join
 if (roomFromUrl) {
-  console.log('Auto-joining room:', roomFromUrl);
-  // document.getElementById('onlineBtn').style.display = 'none'; // Don't hide, update text
+  console.log('Auto-joining room:', roomFromUrl, 'on instance:', instanceFromUrl || 'default');
   const btn = document.getElementById('onlineBtn');
   if (btn) btn.innerText = 'go offline (single player)';
-  game.startMultiplayer(roomFromUrl);
+  game.startMultiplayer(roomFromUrl, instanceFromUrl);
   showQRCode(window.location.href);
 }
 
 const onlineBtn = document.getElementById('onlineBtn');
 if (onlineBtn) {
-  onlineBtn.addEventListener('click', () => {
+  onlineBtn.addEventListener('click', async () => {
     if (game.mode === 'online') {
       // Switch to Offline
       console.log('Switching to Offline Mode');
@@ -73,13 +84,22 @@ if (onlineBtn) {
     } else {
       // Switch to Online
       const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
-      console.log('Online button clicked! Created room:', roomId);
+      console.log('Online button clicked! Creating room:', roomId);
 
-      // Update URL without reload
-      const newUrl = `${window.location.pathname}?room=${roomId}`;
+      // Get instance info from server
+      const instanceInfo = await getInstanceInfo();
+      const instanceId = instanceInfo.instanceId;
+
+      console.log('Room will be hosted on instance:', instanceId);
+
+      // Update URL with both room and instance
+      let newUrl = `${window.location.pathname}?room=${roomId}`;
+      if (instanceId && instanceInfo.isFlyInstance) {
+        newUrl += `&instance=${instanceId}`;
+      }
       window.history.pushState({ path: newUrl }, '', newUrl);
 
-      game.startMultiplayer(roomId);
+      game.startMultiplayer(roomId, instanceId);
       showQRCode(window.location.href);
 
       onlineBtn.innerText = 'GO OFFLINE (SINGLE PLAYER)';
