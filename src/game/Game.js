@@ -73,6 +73,10 @@ export class Game extends BaseGame {
         if (this.gameState === 'SCORING') {
             this.showMenu('START GAME');
         }
+
+        // Hint persistence
+        this.leftHintTimer = 0;
+        this.rightHintTimer = 0;
     }
 
     addParticles(x, y, color, count = 10) {
@@ -316,6 +320,18 @@ export class Game extends BaseGame {
         const dt = (time - this.lastTime) / 1000;
         this.lastTime = time;
 
+        // Update visual hint timers for both local and online
+        if (this.leftHintTimer > 0) this.leftHintTimer -= dt;
+        if (this.rightHintTimer > 0) this.rightHintTimer -= dt;
+
+        // Only show hints for players (not spectators)
+        if (this.gameState === 'COUNTDOWN' && (this.playerIndex !== -1 || this.mode === 'local')) {
+            const leftInput = this.keys['ArrowLeft'] || this.keys['KeyA'] || this.touchDir === -1;
+            const rightInput = this.keys['ArrowRight'] || this.keys['KeyD'] || this.touchDir === 1;
+            if (leftInput) this.leftHintTimer = 0.5;
+            if (rightInput) this.rightHintTimer = 0.5;
+        }
+
         if (this.mode === 'local') {
             this.update(dt);
         } else {
@@ -348,11 +364,11 @@ export class Game extends BaseGame {
 
         // Handle Input (Local Paddle)
         let dir = 0;
-        if (this.keys['ArrowLeft']) dir = -1;
-        if (this.keys['ArrowRight']) dir = 1;
+        if (this.keys['ArrowLeft'] || this.keys['KeyA']) dir = -1;
+        if (this.keys['ArrowRight'] || this.keys['KeyD']) dir = 1;
         if (this.touchDir !== 0) dir = this.touchDir;
 
-        if (this.paddles.length > 0 && dir !== 0) {
+        if (this.paddles.length > 0 && dir !== 0 && (this.gameState === 'PLAYING' || this.gameState === 'COUNTDOWN')) {
             this.paddles[0].move(dir, dt);
         }
 
@@ -391,8 +407,8 @@ export class Game extends BaseGame {
         this.applyInterpolation();
 
         let dir = 0;
-        if (this.keys['ArrowLeft']) dir = -1;
-        if (this.keys['ArrowRight']) dir = 1;
+        if (this.keys['ArrowLeft'] || this.keys['KeyA']) dir = -1;
+        if (this.keys['ArrowRight'] || this.keys['KeyD']) dir = 1;
         if (this.touchDir !== 0) dir = this.touchDir;
 
         if (this.playerIndex !== -1 && this.paddles.length > 0) {
@@ -619,6 +635,12 @@ export class Game extends BaseGame {
         } else if (this.gameState === 'COUNTDOWN') {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+            // Draw control hints for the player's paddle (if not a spectator)
+            if (this.playerIndex !== -1 || this.mode === 'local') {
+                this.drawControlHints(s);
+            }
+
             this.ctx.fillStyle = '#fff';
             this.ctx.shadowColor = '#fff';
             this.ctx.shadowBlur = 20;
@@ -647,8 +669,75 @@ export class Game extends BaseGame {
 
             this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
             this.ctx.shadowBlur = 0;
-            this.ctx.font = `400 ${16 * s}px 'Outfit', sans-serif`;
-            this.ctx.fillText('All player slots are full', this.canvas.width / 2, this.canvas.height - 15 * s);
         }
+    }
+
+    drawControlHints(s) {
+        if (this.leftHintTimer <= 0 && this.rightHintTimer <= 0) return;
+
+        // Use maximum of both timers for overall alpha
+        const timer = Math.max(this.leftHintTimer, this.rightHintTimer);
+        const alpha = Math.min(1.0, timer * 2.0) * 0.6;
+
+        // Calculate radii
+        // Circumradius (distance from center to a vertex)
+        const vertices = this.polygon.vertices;
+        const circumradius = Math.sqrt(vertices[0].x * vertices[0].x + vertices[0].y * vertices[0].y);
+        const innerRadius = circumradius * (2 / 3);
+
+        this.ctx.save();
+        this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.scale(s, s);
+
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        this.ctx.lineWidth = 10;
+        this.ctx.lineCap = 'round';
+
+        const isRight = this.rightHintTimer > this.leftHintTimer;
+
+        // 4 arrows, each 1/8th of circumference (PI / 4)
+        const arcLen = Math.PI / 4;
+        const spacing = Math.PI / 2; // Evenly distributed
+
+        for (let i = 0; i < 4; i++) {
+            const centerAngle = i * spacing;
+            const startAngle = centerAngle - arcLen / 2;
+            const endAngle = centerAngle + arcLen / 2;
+
+            // Draw the arc
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, innerRadius, startAngle, endAngle);
+            this.ctx.stroke();
+
+            // Tip is at the "forward" end of movement
+            const tipAngle = isRight ? endAngle : startAngle;
+            const tipX = Math.cos(tipAngle) * innerRadius;
+            const tipY = Math.sin(tipAngle) * innerRadius;
+
+            // Point direction (tangent)
+            // Clockwise = +PI/2 from radial angle, Anti-clockwise = -PI/2
+            const pointingAngle = isRight ? tipAngle + Math.PI / 2 : tipAngle - Math.PI / 2;
+            const headSize = 15;
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(tipX, tipY);
+
+            // Side lines point "backwards" from the pointing direction
+            const backAngle = pointingAngle + Math.PI;
+            this.ctx.lineTo(
+                tipX + Math.cos(backAngle - 0.5) * headSize,
+                tipY + Math.sin(backAngle + 0.5) * headSize
+            );
+
+            this.ctx.moveTo(tipX, tipY);
+            this.ctx.lineTo(
+                tipX + Math.cos(backAngle + 0.5) * headSize,
+                tipY + Math.sin(backAngle - 0.5) * headSize
+            );
+
+            this.ctx.stroke();
+        }
+
+        this.ctx.restore();
     }
 }
