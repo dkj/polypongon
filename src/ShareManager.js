@@ -3,13 +3,13 @@ import QRCode from 'qrcode';
 export class ShareManager {
     constructor() {
         this.title = 'PolyPongon';
-        this.text = 'Check out this awesome pentagon pong game!';
+        this.text = 'For your consideration, I am sharing this polygon pong game.';
     }
 
     async share(url, isInvite = false) {
         const shareData = {
             title: this.title,
-            text: isInvite ? 'Join my PolyPongon game!' : this.text,
+            text: isInvite ? 'Care to join us for our imminent game of Polypongon?' : this.text,
             url: url
         };
 
@@ -39,7 +39,7 @@ export class ShareManager {
     }
 
     getSocialLinks(url, isInvite = false) {
-        const text = isInvite ? 'Join my PolyPongon game!' : this.text;
+        const text = isInvite ? 'Care to join us for our imminent game of Polypongon?' : this.text;
         const encodedUrl = encodeURIComponent(url);
         const encodedText = encodeURIComponent(text);
 
