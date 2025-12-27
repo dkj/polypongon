@@ -111,17 +111,19 @@ export class Game extends BaseGame {
     }
 
     showMenu(buttonText) {
-        if (this.menuContainer) {
+        if (this.menuContainer && this.menuContainer.style.display !== 'flex') {
             this.menuContainer.style.display = 'flex';
             if (this.restartBtn) {
                 this.restartBtn.innerText = buttonText;
                 this.restartBtn.focus();
             }
+        } else if (this.restartBtn && this.restartBtn.innerText !== buttonText) {
+            this.restartBtn.innerText = buttonText;
         }
     }
 
     hideMenu() {
-        if (this.menuContainer) {
+        if (this.menuContainer && this.menuContainer.style.display !== 'none') {
             this.menuContainer.style.display = 'none';
         }
     }

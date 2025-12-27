@@ -117,6 +117,22 @@ test.describe('Sharing Functionality', () => {
         expect(gameState).toBe('SCORING');
     });
 
+    test('should allow tabbing through modal elements', async ({ page }) => {
+        await page.locator('#shareMenuBtn').click();
+
+        // Tab 1: Close button
+        await page.keyboard.press('Tab');
+        await expect(page.locator('#closeShareBtn')).toBeFocused();
+
+        // Tab 2: URL Input
+        await page.keyboard.press('Tab');
+        await expect(page.locator('#shareUrlInput')).toBeFocused();
+
+        // Tab 3: Copy button
+        await page.keyboard.press('Tab');
+        await expect(page.locator('#copyBtn')).toBeFocused();
+    });
+
     test('should not start game when opening modal with Enter', async ({ page }) => {
         // Set game to SCORING state so Enter would normally start it
         await page.evaluate(() => {

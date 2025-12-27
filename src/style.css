@@ -155,6 +155,13 @@ canvas#gameCanvas {
   transform: translateY(-1px) scale(0.98);
 }
 
+.btn:focus-visible,
+.social-btn:focus-visible {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 4px;
+  transform: translateY(-2px);
+}
+
 #qr-container {
   display: none;
   position: fixed;
