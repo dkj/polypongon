@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+test.describe.configure({ mode: 'serial' });
+
 test.describe('PWA Features', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
@@ -24,15 +26,16 @@ test.describe('PWA Features', () => {
 
     test('should register a service worker', async ({ page }) => {
         // Wait for service worker to register
-        // Vite PWA registers it automatically on load if configured
-        const swFound = await page.evaluate(async () => {
+        await page.waitForFunction(async () => {
             if (!('serviceWorker' in navigator)) return false;
             const registrations = await navigator.serviceWorker.getRegistrations();
             return registrations.length > 0;
-        });
+        }, { timeout: 5000 });
 
-        // Note: In Dev mode with devOptions.enabled = true, it should show up.
-        // However, it might take a moment to register.
+        const swFound = await page.evaluate(async () => {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            return registrations.length > 0;
+        });
         expect(swFound).toBe(true);
     });
 

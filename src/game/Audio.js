@@ -11,6 +11,13 @@ export class AudioManager {
 
         // Scale for procedural music (Pentatonic)
         this.scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
+
+        this.modes = {
+            OFF: 'off',
+            INTERACTIONS: 'interactions',
+            ALL: 'all'
+        };
+        this.mode = this.modes.ALL;
     }
 
     async init() {
@@ -29,7 +36,7 @@ export class AudioManager {
     }
 
     playBounce() {
-        if (this.ctx.state === 'suspended') return;
+        if (this.ctx.state === 'suspended' || this.mode === this.modes.OFF) return;
 
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -62,6 +69,7 @@ export class AudioManager {
     }
 
     playNote(time) {
+        if (this.mode !== this.modes.ALL) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
 
@@ -84,5 +92,22 @@ export class AudioManager {
         // Increase tempo with difficulty
         // Base 120
         this.tempo = 120 + (diff - 1) * 60;
+    }
+
+    setMode(mode) {
+        if (Object.values(this.modes).includes(mode)) {
+            this.mode = mode;
+        }
+    }
+
+    toggleMode() {
+        if (this.mode === this.modes.ALL) {
+            this.mode = this.modes.INTERACTIONS;
+        } else if (this.mode === this.modes.INTERACTIONS) {
+            this.mode = this.modes.OFF;
+        } else {
+            this.mode = this.modes.ALL;
+        }
+        return this.mode;
     }
 }
