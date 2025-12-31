@@ -9,6 +9,7 @@ export class ServerGame extends BaseGame {
         this.roomId = roomId;
 
         this.players = new Map(); // socketId -> edgeIndex
+        this.readyEdges = new Set(); // Set of edgeIndex
         this.running = false;
         this.interval = null;
         this.lastTime = 0;
@@ -39,11 +40,33 @@ export class ServerGame extends BaseGame {
         if (!this.players.has(socketId)) return;
         const edgeIndex = this.players.get(socketId);
         this.players.delete(socketId);
+        this.readyEdges.delete(edgeIndex);
 
         this.paddles = this.paddles.filter(p => p.edgeIndex !== edgeIndex);
 
         if (this.running && this.gameState === 'PLAYING') {
             this.terminateGame('A player left the game');
+        }
+    }
+
+    toggleReady(socketId, isReady) {
+        if (!this.players.has(socketId)) return;
+        const edgeIndex = this.players.get(socketId);
+
+        if (isReady) {
+            this.readyEdges.add(edgeIndex);
+        } else {
+            this.readyEdges.delete(edgeIndex);
+        }
+
+        console.log(`Player ${socketId} (edge ${edgeIndex}) ready: ${isReady}. Ready edges:`, Array.from(this.readyEdges));
+
+        // Check if all players are ready
+        const allReady = Array.from(this.players.values()).every(idx => this.readyEdges.has(idx));
+
+        if (allReady && this.players.size > 0 && this.gameState === 'SCORING') {
+            console.log('All players ready, starting game...');
+            this.resetGame();
         }
     }
 
@@ -158,6 +181,7 @@ export class ServerGame extends BaseGame {
 
     resetGame() {
         this.resetState(); // BaseGame reset
+        this.readyEdges.clear();
 
         // Reset server-specific paddle state
         this.paddles.forEach(p => {
@@ -173,6 +197,7 @@ export class ServerGame extends BaseGame {
             ball: { x: this.ball.x, y: this.ball.y },
             rotation: this.polygon.rotation,
             paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position, width: p.width })),
+            readyEdges: Array.from(this.readyEdges),
             difficulty: this.difficulty,
             gameState: this.gameState,
             score: this.score,

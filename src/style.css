@@ -190,6 +190,13 @@ canvas#gameCanvas {
   transform: translateY(-4px);
 }
 
+.btn-ready {
+  opacity: 0.6;
+  filter: grayscale(0.5);
+  cursor: default;
+  pointer-events: none;
+}
+
 .btn:active {
   transform: translateY(-1px) scale(0.98);
 }

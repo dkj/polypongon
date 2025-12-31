@@ -120,6 +120,10 @@ io.on('connection', (socket) => {
       if (game) game.processRestart();
     });
 
+    socket.on('playerReady', (data) => {
+      if (game) game.toggleReady(socket.id, data.ready);
+    });
+
     // Handle disconnect specifically for this room context
     socket.on('disconnect', () => {
       console.log('user disconnected', socket.id);
