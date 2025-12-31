@@ -28,9 +28,16 @@ module.exports = defineConfig({
         //   use: { ...devices['Desktop Safari'] },
         // },
     ],
-    webServer: {
-        command: 'npm run dev',
-        url: 'http://localhost:12121',
-        reuseExistingServer: true,
-    },
+    webServer: [
+        {
+            command: 'npm run dev',
+            url: 'http://localhost:12121',
+            reuseExistingServer: true,
+        },
+        {
+            command: 'npm run server',
+            port: 12122,
+            reuseExistingServer: true,
+        }
+    ],
 });

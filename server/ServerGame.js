@@ -33,6 +33,8 @@ export class ServerGame extends BaseGame {
         this.paddles.push(paddle);
         this.players.set(socketId, edgeIndex);
 
+        this.broadcastState();
+
         return edgeIndex;
     }
 
@@ -44,6 +46,7 @@ export class ServerGame extends BaseGame {
 
         this.paddles = this.paddles.filter(p => p.edgeIndex !== edgeIndex);
 
+        this.broadcastState();
         this.checkAllReady();
 
         if (this.running && this.gameState === 'PLAYING') {
@@ -63,6 +66,7 @@ export class ServerGame extends BaseGame {
 
         console.log(`Player ${socketId} (edge ${edgeIndex}) ready: ${isReady}. Ready edges:`, Array.from(this.readyEdges));
 
+        this.broadcastState();
         this.checkAllReady();
     }
 
@@ -182,9 +186,9 @@ export class ServerGame extends BaseGame {
     }
 
     processRestart() {
-        if (this.gameState === 'SCORING') {
-            this.resetGame();
-        }
+        // Disabled in multiplayer to enforce the "Ready" flow.
+        // In multiplayer, players should use the "playerReady" event.
+        // this.resetGame();
     }
 
     resetGame() {
