@@ -66,4 +66,42 @@ test.describe('Multiplayer Readiness', () => {
         await context1.close();
         await context2.close();
     });
+
+    test('should start game if a player disconnects leaving only ready players', async ({ browser }) => {
+        const context1 = await browser.newContext();
+        const context2 = await browser.newContext();
+        const page1 = await context1.newPage();
+        const page2 = await context2.newPage();
+
+        await page1.goto('/');
+        await page1.locator('#onlineBtn').click();
+        await page1.waitForSelector('#shareUrlInput');
+        const roomUrl = await page1.locator('#shareUrlInput').inputValue();
+
+        await page2.goto(roomUrl);
+
+        // Close modal on page 1
+        await page1.keyboard.press('Escape');
+        await expect(page1.locator('#share-modal')).not.toHaveClass(/visible/);
+
+        // Wait for both to be in SCORING state
+        await expect(page1.locator('#restartBtn')).toHaveText("I'M READY", { timeout: 10000 });
+        await expect(page2.locator('#restartBtn')).toHaveText("I'M READY", { timeout: 10000 });
+
+        // Player 1 clicks ready
+        await page1.locator('#restartBtn').click();
+        await expect(page1.locator('#restartBtn')).toHaveText("WAITING...");
+
+        // Player 2 disconnects
+        await page2.close();
+        await context2.close();
+
+        // Player 1 should now see the game start (transition to COUNTDOWN/PLAYING)
+        await expect(async () => {
+            const state = await page1.evaluate(() => window.game.gameState);
+            expect(['COUNTDOWN', 'PLAYING']).toContain(state);
+        }).toPass({ timeout: 10000 });
+
+        await context1.close();
+    });
 });

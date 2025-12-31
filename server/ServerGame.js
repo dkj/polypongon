@@ -44,6 +44,8 @@ export class ServerGame extends BaseGame {
 
         this.paddles = this.paddles.filter(p => p.edgeIndex !== edgeIndex);
 
+        this.checkAllReady();
+
         if (this.running && this.gameState === 'PLAYING') {
             this.terminateGame('A player left the game');
         }
@@ -61,10 +63,16 @@ export class ServerGame extends BaseGame {
 
         console.log(`Player ${socketId} (edge ${edgeIndex}) ready: ${isReady}. Ready edges:`, Array.from(this.readyEdges));
 
+        this.checkAllReady();
+    }
+
+    checkAllReady() {
+        if (this.gameState !== 'SCORING' || this.players.size === 0) return;
+
         // Check if all players are ready
         const allReady = Array.from(this.players.values()).every(idx => this.readyEdges.has(idx));
 
-        if (allReady && this.players.size > 0 && this.gameState === 'SCORING') {
+        if (allReady) {
             console.log('All players ready, starting game...');
             this.resetGame();
         }
