@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "test": "npm run test:unit && npm run test:browser",
-    "test:unit": "node test/physics_test.js && node test/gameplay_test.js && node test/verification_test.js && node test/client_regression_test.js && node test/server_config_test.js && node test/instance_affinity_test.js && node test/server_api_test.js",
+    "test:unit": "node test/physics_test.js && node test/gameplay_test.js && node test/verification_test.js && node test/server_first_start_test.js && node test/server_restart_test.js && node test/client_regression_test.js && node test/server_config_test.js && node test/instance_affinity_test.js && node test/server_api_test.js",
     "test:physics": "node test/physics_test.js",
     "test:gameplay": "node test/gameplay_test.js",
     "test:verification": "node test/verification_test.js",

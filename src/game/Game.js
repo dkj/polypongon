@@ -20,6 +20,8 @@ export class Game extends BaseGame {
         this.finalTime = 0;
         this.hasPlayed = false;
 
+        this.readyEdges = [];
+
         this.onStateChange = null;
 
         window.addEventListener('resize', () => this.resize());
@@ -119,18 +121,31 @@ export class Game extends BaseGame {
         } else if (this.restartBtn && this.restartBtn.innerText !== buttonText) {
             this.restartBtn.innerText = buttonText;
         }
+
+        if (this.restartBtn) {
+            if (buttonText === 'WAITING...') {
+                this.restartBtn.classList.add('btn-ready');
+            } else {
+                this.restartBtn.classList.remove('btn-ready');
+            }
+        }
     }
 
     hideMenu() {
         if (this.menuContainer && this.menuContainer.style.display !== 'none') {
             this.menuContainer.style.display = 'none';
         }
+        if (this.restartBtn) {
+            this.restartBtn.classList.remove('btn-ready');
+        }
     }
 
     handleRestartAction() {
         if (this.gameState === 'SCORING') {
             if (this.socket) {
-                this.socket.emit('requestRestart');
+                // In multiplayer, toggle ready state instead of immediate restart
+                const isReady = !this.readyEdges.includes(this.playerIndex);
+                this.socket.emit('playerReady', { ready: isReady });
             } else {
                 this.resetLocalGame();
             }
@@ -236,6 +251,8 @@ export class Game extends BaseGame {
             this.lastScore = state.lastScore;
             this.finalTime = state.finalTime || 0;
             this.timeElapsed = state.timeElapsed || 0;
+            this.readyEdges = state.readyEdges || [];
+
             if (this.lastScore > 0 || this.finalTime > 0) {
                 this.hasPlayed = true;
             }
@@ -244,7 +261,8 @@ export class Game extends BaseGame {
             if (this.gameState === 'PLAYING' || this.gameState === 'COUNTDOWN') {
                 this.hideMenu();
             } else if (this.gameState === 'SCORING') {
-                this.showMenu('PLAY AGAIN');
+                const isReady = this.readyEdges.includes(this.playerIndex);
+                this.showMenu(isReady ? 'WAITING...' : "I'M READY");
             }
             if (state.countdownTimer !== undefined) {
                 this.countdownTimer = state.countdownTimer;
@@ -589,6 +607,36 @@ export class Game extends BaseGame {
             this.ctx.moveTo(startX, startY);
             this.ctx.lineTo(endX, endY);
             this.ctx.stroke();
+
+            // Ready Indicator for Multiplayer
+            if (this.gameState === 'SCORING' && this.mode === 'online' && this.readyEdges.includes(paddle.edgeIndex)) {
+                this.ctx.save();
+                this.ctx.translate((startX + endX) / 2, (startY + endY) / 2);
+
+                // Normal direction (away from center)
+                const nx = (startX + endX) / 2;
+                const ny = (startY + endY) / 2;
+                const angle = Math.atan2(ny, nx);
+                this.ctx.rotate(angle + Math.PI / 2);
+
+                this.ctx.fillStyle = this.getPlayerColor(paddle.edgeIndex, 1);
+                this.ctx.font = `800 ${14}px 'Outfit', sans-serif`;
+                this.ctx.textAlign = 'center';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = this.ctx.fillStyle;
+                this.ctx.fillText('READY', 0, 25);
+                this.ctx.restore();
+
+                // Glow effect on ready paddle
+                this.ctx.save();
+                this.ctx.strokeStyle = this.getPlayerColor(paddle.edgeIndex, 0.4);
+                this.ctx.lineWidth = 15;
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX, startY);
+                this.ctx.lineTo(endX, endY);
+                this.ctx.stroke();
+                this.ctx.restore();
+            }
         });
 
         this.ball.draw(this.ctx, 0, 0);
@@ -655,6 +703,20 @@ export class Game extends BaseGame {
                 this.ctx.fillText("Anyone for Pong?", this.canvas.width / 2, this.canvas.height / 2 - 20 * s);
             }
             this.ctx.font = `400 ${24 * s}px 'Outfit', sans-serif`;
+
+            if (this.mode === 'online') {
+                const isReady = this.readyEdges.includes(this.playerIndex);
+                if (isReady) {
+                    this.ctx.fillStyle = '#94a3b8';
+                    this.ctx.fillText("Waiting for others to say they are ready...", this.canvas.width / 2, this.canvas.height / 2 + 50 * s);
+                } else if (this.readyEdges.length > 0) {
+                    this.ctx.fillStyle = '#38bdf8';
+                    this.ctx.shadowColor = '#38bdf8';
+                    this.ctx.shadowBlur = 15;
+                    this.ctx.fillText("Other players are waiting for you!", this.canvas.width / 2, this.canvas.height / 2 + 50 * s);
+                    this.ctx.shadowBlur = 0;
+                }
+            }
             // this.ctx.fillText(`CLICK OR PRESS SPACE TO RESTART`, this.canvas.width / 2, this.canvas.height / 2 + 60 * s);
         } else if (this.gameState === 'TERMINATED') {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';

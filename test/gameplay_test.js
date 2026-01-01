@@ -9,11 +9,20 @@ const mockIo = {
 
 console.log('--- Starting Gameplay Logic Tests ---');
 
+function startGame(game) {
+    for (const socketId of game.players.keys()) {
+        game.toggleReady(socketId, true);
+    }
+    // Stabilize ball for logic tests to prevent accidental goals from random directions
+    game.ball.vx = 0;
+    game.ball.vy = 0;
+}
+
 function testFreezeAndRestart() {
     console.log('Test: Goal Freeze & Restart');
     const game = new ServerGame(mockIo, 'test_room');
     game.addPlayer('p1');
-    game.start();
+    game.running = true;
 
     // 1. Force state to SCORING (Simulate Goal)
     game.triggerScore(10);
@@ -46,7 +55,7 @@ function testFreezeAndRestart() {
 
     // 3. Trigger Manual Restart
     console.log('Triggering manual restart...');
-    game.processRestart();
+    startGame(game);
 
     if (game.gameState !== 'COUNTDOWN') {
         console.error('❌ Failed: Game did not switch to COUNTDOWN after restart.');
@@ -59,7 +68,6 @@ function testFreezeAndRestart() {
     }
 
     console.log('✅ Passed: Game restarted successfully.');
-    game.stop();
 }
 
 
@@ -68,7 +76,7 @@ function testMultiplayerFreezeAndRestart() {
     const game = new ServerGame(mockIo, 'test_room_multi');
     game.addPlayer('p1_socket');
     game.addPlayer('p2_socket');
-    game.start();
+    game.running = true;
 
     // 1. Trigger Goal
     game.triggerScore(5);
@@ -80,9 +88,9 @@ function testMultiplayerFreezeAndRestart() {
     assert.equal(game.polygon.rotation, initialRotation, 'Rotation should be frozen for multiplayer game too');
 
     // 3. Simulating P2 requesting restart
-    // In index.js, this calls game.processRestart()
+    // In multiplayer, players should use the "playerReady" event.
     console.log('Simulating P2 clicking restart...');
-    game.processRestart();
+    startGame(game);
 
     if (game.gameState !== 'COUNTDOWN') {
         console.error('❌ Failed: P2 restart request did not restart into COUNTDOWN.');
@@ -93,7 +101,6 @@ function testMultiplayerFreezeAndRestart() {
     assert.equal(game.players.size, 2, 'Both players should remain in game');
 
     console.log('✅ Passed: Multiplayer restart worked.');
-    game.stop();
 }
 
 function testGameStartsFrozen() {
@@ -107,7 +114,7 @@ function testGameStartsFrozen() {
 
     // 2. Add a player and start the loop
     game.addPlayer('p1');
-    game.start();
+    game.running = true;
 
     // 3. Verify still frozen after updates
     const initialBallX = game.ball.x;
@@ -125,7 +132,7 @@ function testGameStartsFrozen() {
     console.log('✅ Passed: Physics frozen on start - no auto-play.');
 
     // 4. Player triggers restart - game should start
-    game.processRestart();
+    startGame(game);
 
     assert.equal(game.gameState, 'COUNTDOWN', 'Game should switch to COUNTDOWN after restart');
     console.log('✅ Passed: Game moved to COUNTDOWN after manual restart.');
@@ -142,15 +149,14 @@ function testGameStartsFrozen() {
     assert.notEqual(game.polygon.rotation, initialRotation, 'Polygon should rotate after game starts');
     console.log('✅ Passed: Physics active after restart.');
 
-    game.stop();
 }
 
 function testPaddleWidthBroadcast() {
     console.log('\nTest: Paddle Width Broadcast');
     const game = new ServerGame(mockIo, 'test_room_width');
     game.addPlayer('p1');
-    game.start();
-    game.processRestart(); // Start countdown
+    game.running = true;
+    startGame(game); // Start countdown
     for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     // Simulate some time passing to change difficulty/width
@@ -181,15 +187,14 @@ function testPaddleWidthBroadcast() {
     assert.ok(paddle.width > 0 && paddle.width <= 0.5, 'Paddle width should be reasonable (0 < w <= 0.5)');
 
     console.log('✅ Passed: Paddle width is broadcast:', paddle.width);
-    game.stop();
 }
 
 function testGoalEventIncludesScore() {
     console.log('\nTest: Goal Event Emits Score');
     const game = new ServerGame(mockIo, 'test_room_goal');
     game.addPlayer('p1');
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
 
     // Capture emitted events
     let goalEvent = null;
@@ -215,7 +220,6 @@ function testGoalEventIncludesScore() {
     assert.equal(goalEvent.time, 7, 'Time should be 7 (floored 7.5)');
 
     console.log('✅ Passed: Goal event includes score and time.');
-    game.stop();
 }
 
 testGameStartsFrozen();
@@ -231,8 +235,8 @@ function testPlayerDisconnectTerminatesGame() {
     const game = new ServerGame(mockIo, 'test_room_disconnect');
     game.addPlayer('p1');
     game.addPlayer('p2');
-    game.start();
-    game.processRestart(); // Start countdown
+    game.running = true;
+    startGame(game); // Start countdown
     for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     assert.equal(game.gameState, 'PLAYING', 'Game should be playing');
@@ -245,7 +249,6 @@ function testPlayerDisconnectTerminatesGame() {
     assert.equal(game.running, false, 'Game should stop running');
 
     console.log('✅ Passed: Player disconnect terminates active game.');
-    game.stop();
 }
 
 function testDisconnectRemovesPaddle() {
@@ -253,8 +256,8 @@ function testDisconnectRemovesPaddle() {
     const game = new ServerGame(mockIo, 'test_room_paddle_remove');
     game.addPlayer('p1');
     game.addPlayer('p2');
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
     for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     assert.equal(game.paddles.length, 2, 'Should start with 2 paddles');
@@ -271,7 +274,6 @@ function testDisconnectRemovesPaddle() {
     assert.equal(game.paddles[0].edgeIndex, 1, 'Remaining paddle should be on edge 1');
 
     console.log('✅ Passed: Disconnected player paddle removed.');
-    game.stop();
 }
 
 function testDisconnectEmitsTerminatedEvent() {
@@ -291,8 +293,8 @@ function testDisconnectEmitsTerminatedEvent() {
     const game = new ServerGame(captureIo, 'test_room_event');
     game.addPlayer('p1');
     game.addPlayer('p2');
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
     for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     // Simulate a bit of game time, but not enough to score a goal (total time < 1.0s)
@@ -308,7 +310,6 @@ function testDisconnectEmitsTerminatedEvent() {
     assert.ok(typeof terminatedEvent.lastScore === 'number', 'Should include lastScore');
 
     console.log('✅ Passed: gameTerminated event emitted correctly.');
-    game.stop();
 }
 
 function testDisconnectDuringScoring() {
@@ -316,8 +317,8 @@ function testDisconnectDuringScoring() {
     const game = new ServerGame(mockIo, 'test_room_scoring_disconnect');
     game.addPlayer('p1');
     game.addPlayer('p2');
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
     for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     // Trigger a goal - game should be in SCORING state
@@ -331,15 +332,14 @@ function testDisconnectDuringScoring() {
     assert.equal(game.gameState, 'SCORING', 'Game should remain in SCORING state');
 
     console.log('✅ Passed: Disconnect during SCORING does not trigger termination.');
-    game.stop();
 }
 
 function testDisconnectNonExistentPlayer() {
     console.log('\nTest: Removing Non-Existent Player Does Nothing');
     const game = new ServerGame(mockIo, 'test_room_nonexistent');
     game.addPlayer('p1');
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
     for (let i = 0; i < 200; i++) game.update(0.016); // Advance to playing
 
     const initialState = game.gameState;
@@ -352,7 +352,6 @@ function testDisconnectNonExistentPlayer() {
     assert.equal(game.paddles.length, initialPaddleCount, 'Paddle count should not change');
 
     console.log('✅ Passed: Removing non-existent player has no effect.');
-    game.stop();
 }
 
 testPlayerDisconnectTerminatesGame();
@@ -389,7 +388,6 @@ function testSixthPlayerBecomesSpectator() {
     assert.equal(game.players.size, 5, 'Players map should only have 5 active players');
 
     console.log('✅ Passed: 6th player correctly assigned as spectator.');
-    game.stop();
 }
 
 function testSpectatorDoesNotGetPaddle() {
@@ -406,8 +404,8 @@ function testSpectatorDoesNotGetPaddle() {
     assert.equal(spectatorIndex, -1, 'Spectator should get -1 index');
 
     // Start and play the game
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
     for (let i = 0; i < 200; i++) game.update(0.016);
 
     // Verify no paddle exists for spectator
@@ -421,7 +419,6 @@ function testSpectatorDoesNotGetPaddle() {
     }
 
     console.log('✅ Passed: Spectator has no paddle in active game.');
-    game.stop();
 }
 
 function testSpectatorReceivesGameState() {
@@ -448,8 +445,8 @@ function testSpectatorReceivesGameState() {
     // Add spectator
     game.addPlayer('spectator');
 
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
 
     // Run some game updates
     for (let i = 0; i < 60; i++) {
@@ -460,7 +457,6 @@ function testSpectatorReceivesGameState() {
     assert.ok(broadcastCount > 0, 'Game state should be broadcast to room (including spectator)');
     console.log(`✅ Passed: Spectator received ${broadcastCount} game state updates.`);
 
-    game.stop();
 }
 
 function testMultipleSpectators() {
@@ -483,7 +479,6 @@ function testMultipleSpectators() {
     assert.equal(game.paddles.length, 5, 'Should still have exactly 5 paddles');
 
     console.log('✅ Passed: Multiple spectators can join without affecting game.');
-    game.stop();
 }
 
 function testSpectatorAfterPlayerLeaves() {
@@ -510,7 +505,6 @@ function testSpectatorAfterPlayerLeaves() {
     // Let's test this in a fresh scenario after termination
 
     console.log('✅ Passed: Spectator behavior consistent after player disconnect.');
-    game.stop();
 }
 
 function testSpectatorCannotControlPaddle() {
@@ -525,8 +519,8 @@ function testSpectatorCannotControlPaddle() {
     // Add spectator
     game.addPlayer('spectator_socket');
 
-    game.start();
-    game.processRestart();
+    game.running = true;
+    startGame(game);
     for (let i = 0; i < 200; i++) game.update(0.016);
 
     // Try to send input from spectator
@@ -537,7 +531,6 @@ function testSpectatorCannotControlPaddle() {
 
     // The handleInput should just return early since spectator is not in players map
     console.log('✅ Passed: Spectator input is ignored.');
-    game.stop();
 }
 
 testSixthPlayerBecomesSpectator();

@@ -49,12 +49,24 @@ global.document = {
     getElementById: () => ({
         addEventListener: () => { },
         style: {},
-        focus: () => { }
+        focus: () => { },
+        classList: {
+            add: () => { },
+            remove: () => { },
+            contains: () => false,
+            toggle: () => { }
+        }
     }),
     querySelector: () => ({
         getContext: () => ({}),
         addEventListener: () => { },
-        style: {}
+        style: {},
+        classList: {
+            add: () => { },
+            remove: () => { },
+            contains: () => false,
+            toggle: () => { }
+        }
     })
 };
 global.requestAnimationFrame = (_cb) => { };

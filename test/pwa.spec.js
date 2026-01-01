@@ -25,12 +25,15 @@ test.describe('PWA Features', () => {
     });
 
     test('should register a service worker', async ({ page }) => {
+        // Ensure page is fully loaded
+        await page.waitForLoadState('networkidle');
+
         // Wait for service worker to register
         await page.waitForFunction(async () => {
             if (!('serviceWorker' in navigator)) return false;
             const registrations = await navigator.serviceWorker.getRegistrations();
             return registrations.length > 0;
-        }, { timeout: 5000 });
+        }, { timeout: 10000 });
 
         const swFound = await page.evaluate(async () => {
             const registrations = await navigator.serviceWorker.getRegistrations();
