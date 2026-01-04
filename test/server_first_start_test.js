@@ -50,9 +50,9 @@ function testServerFirstStart() {
     console.log('  Ball pos:', game.ball.x, game.ball.y);  // Still 0, 0 (frozen)
     console.log('  Score:', game.score);  // 0
 
-    // 4. Player clicks to start (triggers requestRestart)
-    console.log('\nPlayer clicking to start (processRestart)...');
-    game.processRestart();
+    // 4. Player clicks to start (triggers playerReady)
+    console.log('\nPlayer clicking to start (toggleReady)...');
+    game.toggleReady('p1', true);
 
     console.log('After processRestart:');
     console.log('  GameState:', game.gameState);  // PLAYING

@@ -21,7 +21,8 @@ function testRemainingPlayerControl() {
     game.addPlayer(p2Socket); // edgeIndex 1
 
     game.start();
-    game.processRestart();
+    game.toggleReady(p1Socket, true);
+    game.toggleReady(p2Socket, true);
 
     // Safety check: Both paddles exist
     assert.equal(game.paddles.length, 2, 'Should start with 2 paddles');

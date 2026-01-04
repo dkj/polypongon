@@ -52,8 +52,8 @@ function testServerRestart() {
     console.log('Ball position after SCORING frames:', game.ball.x.toFixed(2), game.ball.y.toFixed(2));
 
     // Now trigger restart
-    console.log('\nProcessing restart...');
-    game.processRestart();
+    console.log('\nProcessing restart (via toggleReady)...');
+    game.toggleReady('p1', true);
 
     console.log('GameState after restart:', game.gameState);
     console.log('Ball position after restart:', game.ball.x.toFixed(2), game.ball.y.toFixed(2));

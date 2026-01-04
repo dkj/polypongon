@@ -116,10 +116,6 @@ io.on('connection', (socket) => {
       if (game) game.handleInput(socket.id, data.dir);
     });
 
-    socket.on('requestRestart', () => {
-      // Compatibility: Map legacy restart requests to the new readiness flow
-      if (game) game.toggleReady(socket.id, true);
-    });
 
     socket.on('playerReady', (data) => {
       if (game) game.toggleReady(socket.id, data.ready);

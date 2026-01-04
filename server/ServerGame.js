@@ -185,11 +185,6 @@ export class ServerGame extends BaseGame {
         });
     }
 
-    processRestart() {
-        // Legacy restart method. Calls resetGame() directly.
-        // For multiplayer readiness flow, use toggleReady().
-        this.resetGame();
-    }
 
     resetGame() {
         this.resetState(); // BaseGame reset
