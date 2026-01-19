@@ -213,9 +213,8 @@ export class ServerGame extends BaseGame {
 
     broadcastState() {
         this.io.to(this.roomId).emit('gameState', {
-            ball: { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy },
+            ball: { x: this.ball.x, y: this.ball.y },
             rotation: this.polygon.rotation,
-            rotationSpeed: this.polygon.rotationSpeed,
             rotationDirection: this.rotationDirection,
             paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position, width: p.width })),
             readyEdges: Array.from(this.readyEdges),
@@ -227,8 +226,7 @@ export class ServerGame extends BaseGame {
             timeElapsed: this.timeElapsed,
             scoreDisplayTimer: this.scoreDisplayTimer,
             countdownTimer: this.countdownTimer,
-            celebrationTimer: this.celebrationTimer,
-            timestamp: Date.now()
+            celebrationTimer: this.celebrationTimer
         });
     }
 }
