@@ -23,8 +23,6 @@ export class Game extends BaseGame {
         this.readyEdges = [];
 
         this.onStateChange = null;
-        this.serverClockOffset = 0; // Estimated difference: serverTime - clientTime
-        this.localHistory = []; // { position, timestamp } stores for local reconciliation
 
         window.addEventListener('resize', () => this.resize());
 
@@ -210,7 +208,6 @@ export class Game extends BaseGame {
         console.log('Attempting to connect to server...');
         this.clearResults();
         this.mode = 'online';
-        this.serverClockOffset = 0;
 
         // Build query parameters for instance routing
         const query = {};
@@ -248,25 +245,29 @@ export class Game extends BaseGame {
             }
         });
 
-        this.stateBuffer = [];
 
         this.socket.on('gameState', (state) => {
-            this.stateBuffer.push(state);
-            if (this.stateBuffer.length > 30) {
-                this.stateBuffer.shift();
-            }
+            // APPLY STATE DIRECTLY
+            this.ball.x = state.ball.x;
+            this.ball.y = state.ball.y;
+            this.ball.updateTrail();
 
-            // Sync clock: estimate offset (accounting for latency is hard, but simple offset helps)
-            // Initializing with the first packet and then smoothing updates.
-            if (state.timestamp) {
-                const currentOffset = state.timestamp - Date.now();
-                if (this.serverClockOffset === 0) {
-                    this.serverClockOffset = currentOffset;
-                } else {
-                    // Smoothly adjust offset to filter out jitter
-                    this.serverClockOffset = this.serverClockOffset * 0.99 + currentOffset * 0.01;
-                }
-            }
+            this.polygon.rotation = state.rotation;
+            this.polygon.updateVertices();
+
+            // Setup paddles from server data
+            this.paddles = state.paddles.map(pData => {
+                // If this is our paddle, we already moved it based on input in handleOnlineInput
+                // But for the simplest model, we just snap to server truth for now.
+                // Optionally keep client prediction by filtering out our own index if we want it super responsive.
+                // User said "simplest possible earlier multiplayer model". 
+                // Earlier models usually just snapped other paddles and predicted own.
+
+                const p = new Paddle(pData.edgeIndex);
+                p.position = pData.position;
+                p.width = pData.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
+                return p;
+            });
 
             this.difficulty = state.difficulty;
             this.rotationDirection = state.rotationDirection;
@@ -295,7 +296,6 @@ export class Game extends BaseGame {
             if (state.countdownTimer !== undefined && state.countdownTimer !== null) {
                 this.countdownTimer = state.countdownTimer;
             } else if (state.gameState === 'COUNTDOWN' && previousState !== 'COUNTDOWN') {
-                // Fallback: Resetting countdown timer if server packet is missing it
                 this.countdownTimer = 3;
             }
         });
@@ -326,7 +326,6 @@ export class Game extends BaseGame {
             this.terminationReason = data.reason;
             this.lastScore = data.lastScore;
             this.finalTime = data.finalTime || 0;
-            this.stateBuffer = [];
 
             this.refreshMenu();
         });
@@ -353,7 +352,6 @@ export class Game extends BaseGame {
         this.playerIndex = -1;
         this.currentRoomId = null;
         this.currentInstanceId = null;
-        this.serverClockOffset = 0;
 
         // Reset to initial menu state instead of immediately starting
         this.setGameState('SCORING');
@@ -375,7 +373,6 @@ export class Game extends BaseGame {
         this.playerIndex = -1;
         this.setGameState('SCORING');
         this.terminationReason = null;
-        this.stateBuffer = [];
         this.clearResults();
         this.startMultiplayer(this.currentRoomId, this.currentInstanceId);
     }
@@ -483,23 +480,6 @@ export class Game extends BaseGame {
     handleOnlineInput(dt) {
         if (!this.socket) return;
 
-        // Record current local state for reconciliation before we apply new frames
-        if (this.playerIndex !== -1 && this.paddles.length > 0) {
-            const myPaddle = this.paddles.find(p => p.edgeIndex === this.playerIndex);
-            if (myPaddle) {
-                this.localHistory.push({
-                    position: myPaddle.position,
-                    timestamp: Date.now() + this.serverClockOffset
-                });
-                // Keep small history buffer (e.g. 500ms)
-                const limit = Date.now() + this.serverClockOffset - 500;
-                while (this.localHistory.length > 0 && this.localHistory[0].timestamp < limit) {
-                    this.localHistory.shift();
-                }
-            }
-        }
-
-        this.applyInterpolation();
         super.updateGameRules(dt);
 
         if (this.gameState === 'SCORING') return;
@@ -522,102 +502,6 @@ export class Game extends BaseGame {
         }
     }
 
-    applyInterpolation() {
-        if (this.stateBuffer.length < 2) return;
-
-        const now = Date.now() + this.serverClockOffset;
-        const renderTimestamp = now - 100;
-        let s0 = this.stateBuffer[0];
-        let s1 = this.stateBuffer[1];
-        let i = 0;
-
-        while (i < this.stateBuffer.length - 1 && this.stateBuffer[i + 1].timestamp <= renderTimestamp) {
-            s0 = this.stateBuffer[i];
-            s1 = this.stateBuffer[i + 1];
-            i++;
-        }
-
-        const lerp = (a, b, t) => a + (b - a) * t;
-        let t = 0;
-        if (s1.timestamp > s0.timestamp) {
-            t = (renderTimestamp - s0.timestamp) / (s1.timestamp - s0.timestamp);
-        }
-        t = Math.max(0, Math.min(1, t));
-
-        if (renderTimestamp > s1.timestamp) {
-            // Extrapolate ball if we're ahead of the buffer
-            const dt = (renderTimestamp - s1.timestamp) / 1000;
-            this.ball.x = s1.ball.x + (s1.ball.vx || 0) * dt;
-            this.ball.y = s1.ball.y + (s1.ball.vy || 0) * dt;
-        } else if (renderTimestamp < s0.timestamp) {
-            this.ball.x = s0.ball.x;
-            this.ball.y = s0.ball.y;
-        } else {
-            this.ball.x = lerp(s0.ball.x, s1.ball.x, t);
-            this.ball.y = lerp(s0.ball.y, s1.ball.y, t);
-        }
-
-        this.ball.updateTrail();
-
-        if (renderTimestamp > s1.timestamp) {
-            // Extrapolate rotation if we're ahead
-            const dt = (renderTimestamp - s1.timestamp) / 1000;
-            this.polygon.rotation = s1.rotation + (s1.rotationSpeed || 0) * dt;
-        } else {
-            this.polygon.rotation = lerp(s0.rotation, s1.rotation, t);
-        }
-        this.polygon.updateVertices();
-
-        this.paddles = s1.paddles.map(pData1 => {
-            if (this.playerIndex !== -1 && pData1.edgeIndex === this.playerIndex) {
-                // LOCAL PLAYER: Use predictive local state with reconciliation
-                let myPaddle = this.paddles.find(p => p.edgeIndex === this.playerIndex);
-                if (!myPaddle) myPaddle = new Paddle(pData1.edgeIndex);
-
-                // Sync metadata (width/difficulty)
-                myPaddle.width = pData1.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
-
-                // Reconciliation: Find what our position was at the server's renderTimestamp
-                // and compare it to the server's interpolated position.
-                const interpolatedServerPos = (s0.paddles.find(pp => pp.edgeIndex === this.playerIndex)?.position !== undefined)
-                    ? lerp(s0.paddles.find(pp => pp.edgeIndex === this.playerIndex).position, pData1.position, t)
-                    : pData1.position;
-
-                // Find entry in history closest to renderTimestamp
-                let closest = null;
-                let minDiff = Infinity;
-                for (const entry of this.localHistory) {
-                    const diff = Math.abs(entry.timestamp - renderTimestamp);
-                    if (diff < minDiff) {
-                        minDiff = diff;
-                        closest = entry;
-                    }
-                }
-
-                if (closest && minDiff < 50) { // Only reconcile if we have a reasonably close history point
-                    const error = interpolatedServerPos - closest.position;
-                    // Apply smooth correction factor to current position
-                    // 0.1 means we fix 10% of the drift per frame
-                    if (Math.abs(error) > 0.001) {
-                        myPaddle.position += error * 0.1;
-                    }
-                }
-
-                return myPaddle;
-            }
-
-            // OTHER PLAYERS: Use standard 100ms interpolation
-            const p = new Paddle(pData1.edgeIndex);
-            const pData0 = s0.paddles.find(pp => pp.edgeIndex === pData1.edgeIndex);
-            if (pData0) {
-                p.position = lerp(pData0.position, pData1.position, t);
-            } else {
-                p.position = pData1.position;
-            }
-            p.width = pData1.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
-            return p;
-        });
-    }
 
     getPlayerColor(index, alpha = 1) {
         const total = this.polygon.sides;

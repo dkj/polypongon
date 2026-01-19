@@ -77,27 +77,6 @@ test.describe('End of Game Features', () => {
                 window.game.finalTime = 45;
                 window.game.hasPlayed = true;
 
-                // Mock state buffer for interpolation movement
-                const now = Date.now();
-                window.game.stateBuffer = [
-                    {
-                        timestamp: now - 200,
-                        ball: { x: 0, y: 0 },
-                        paddles: [],
-                        rotation: 0,
-                        difficulty: 1,
-                        gameState: 'SCORING'
-                    },
-                    {
-                        timestamp: now + 500,
-                        ball: { x: 100, y: 100 },
-                        paddles: [],
-                        rotation: 0.1,
-                        difficulty: 1,
-                        gameState: 'SCORING'
-                    }
-                ];
-
                 // Keep socket listeners active to trigger them manually
 
                 window.game.setMenuVisible(false);
@@ -106,16 +85,29 @@ test.describe('End of Game Features', () => {
             // 1. Menu hidden
             await expect(page.locator('#game-menu')).toBeHidden();
 
-            // 2. Ball moves
+            // 2. Ball moves when receiving state
+
+            await page.evaluate(() => {
+                const handler = window.game.socket.listeners('gameState')[0];
+                handler({
+                    ball: { x: 100, y: 100 },
+                    paddles: [],
+                    rotation: 0.1,
+                    difficulty: 1,
+                    gameState: 'SCORING'
+                });
+            });
+
             const pos1 = await page.evaluate(() => ({ x: window.game.ball.x, y: window.game.ball.y }));
-            await page.waitForTimeout(100);
-            const pos2 = await page.evaluate(() => ({ x: window.game.ball.x, y: window.game.ball.y }));
-            expect(pos2.x).not.toBe(pos1.x);
+            expect(pos1.x).toBe(100);
+            expect(pos1.y).toBe(100);
 
             // 3. Trigger menu via socket state update (celebration finished)
             await page.evaluate(() => {
                 const handler = window.game.socket.listeners('gameState')[0];
                 handler({
+                    ball: { x: 0, y: 0 },
+                    rotation: 0,
                     gameState: 'SCORING',
                     celebrationTimer: 0,
                     lastScore: 8,
@@ -209,9 +201,13 @@ test.describe('End of Game Features', () => {
                 // Close auto-opened share modal
                 document.getElementById('share-modal').classList.remove('visible');
 
+                window.game.socket.disconnect();
+
                 // Manually trigger the gameState handler as if it came from socket
                 // We use the same object structure that Game.js expects
                 const mockState = {
+                    ball: { x: 0, y: 0 },
+                    rotation: 0,
                     gameState: 'SCORING',
                     celebrationTimer: 2.0,
                     readyEdges: [],
@@ -232,6 +228,8 @@ test.describe('End of Game Features', () => {
             // 2. Advance server state to celebration finished
             await page.evaluate(() => {
                 const mockState = {
+                    ball: { x: 0, y: 0 },
+                    rotation: 0,
                     gameState: 'SCORING',
                     celebrationTimer: 0,
                     readyEdges: [],
