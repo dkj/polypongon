@@ -5,7 +5,10 @@ import { ShareManager } from './ShareManager.js';
 import * as Sentry from "@sentry/browser";
 
 // Initialize Sentry only if DSN is provided
-const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
+// Prioritize runtime-injected DSN from server, fall back to build-time env var
+const SENTRY_DSN = (window.VITE_SENTRY_DSN && window.VITE_SENTRY_DSN !== "__VITE_SENTRY_DSN__")
+  ? window.VITE_SENTRY_DSN
+  : import.meta.env.VITE_SENTRY_DSN;
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,

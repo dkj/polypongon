@@ -108,9 +108,17 @@ app.get('/api/instance', (req, res) => {
 // Static file serving (catch-all routes last)
 const distPath = path.resolve(__dirname, '../dist');
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, { index: false }));
   app.get(/^.*$/, (_req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
+    try {
+      let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
+      const dsn = process.env.VITE_SENTRY_DSN || '';
+      html = html.replace('__VITE_SENTRY_DSN__', dsn);
+      res.send(html);
+    } catch (err) {
+      console.error('Error serving index.html:', err);
+      res.status(500).send('Server Error');
+    }
   });
 } else {
   console.warn(`Static assets not found at ${distPath}.Only socket services will be available.`);
