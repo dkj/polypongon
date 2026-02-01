@@ -2,6 +2,37 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { Game } from './game/Game.js';
 import { ShareManager } from './ShareManager.js';
+import * as Sentry from "@sentry/browser";
+
+// Initialize Sentry asynchronously from server config
+async function initSentry() {
+  try {
+    const response = await fetch('/api/sentry-config');
+    const config = await response.json();
+
+    const dsn = config.dsn || import.meta.env.VITE_SENTRY_DSN;
+    if (dsn) {
+      Sentry.init({
+        dsn: dsn,
+        environment: config.environment || "",
+        integrations: [
+          Sentry.feedbackIntegration({
+            colorScheme: "dark",
+            isNameRequired: false,
+            isEmailRequired: false,
+            autoInject: true,
+          }),
+        ],
+        tracesSampleRate: 1.0,
+      });
+      console.log('Sentry initialized with environment:', config.environment || 'none');
+    }
+  } catch (e) {
+    console.error('Failed to initialize Sentry:', e);
+  }
+}
+
+initSentry();
 
 document.querySelector('#app').innerHTML = `
   <canvas id="gameCanvas"></canvas>

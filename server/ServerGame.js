@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import { Paddle } from '../src/game/Paddle.js';
 import { BaseGame } from '../src/game/BaseGame.js';
 import { GAME_CONSTANTS } from '../src/game/Constants.js';
@@ -134,6 +135,9 @@ export class ServerGame extends BaseGame {
             this.broadcastState();
         } catch (e) {
             console.error('ServerGame Loop Error:', e);
+            if (process.env.SENTRY_DSN) {
+                Sentry.captureException(e);
+            }
             this.stop();
         }
     }
@@ -206,6 +210,9 @@ export class ServerGame extends BaseGame {
             this.broadcastState();
         } catch (e) {
             console.error(`[ServerGame] CRITICAL ERROR in resetGame:`, e);
+            if (process.env.SENTRY_DSN) {
+                Sentry.captureException(e);
+            }
         } finally {
             this.restarting = false;
         }
