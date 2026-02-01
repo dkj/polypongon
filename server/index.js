@@ -13,11 +13,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Set up Sentry error handler if DSN is provided
-if (process.env.SENTRY_DSN) {
-  Sentry.setupExpressErrorHandler(app);
-}
-
 const httpServer = createServer(app);
 
 // Get Fly.io instance information
@@ -119,6 +114,11 @@ if (fs.existsSync(distPath)) {
   });
 } else {
   console.warn(`Static assets not found at ${distPath}.Only socket services will be available.`);
+}
+
+// Sentry error handler must be after all routes
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
 }
 
 io.on('connection', (socket) => {
