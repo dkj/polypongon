@@ -4,26 +4,35 @@ import { Game } from './game/Game.js';
 import { ShareManager } from './ShareManager.js';
 import * as Sentry from "@sentry/browser";
 
-// Initialize Sentry only if DSN is provided
-// Prioritize runtime-injected DSN from server, fall back to build-time env var
-const SENTRY_DSN = (window.VITE_SENTRY_DSN && window.VITE_SENTRY_DSN !== "__VITE_SENTRY_DSN__")
-  ? window.VITE_SENTRY_DSN
-  : import.meta.env.VITE_SENTRY_DSN;
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    environment: window.SENTRY_ENVIRONMENT || "",
-    integrations: [
-      Sentry.feedbackIntegration({
-        colorScheme: "dark",
-        isNameRequired: false,
-        isEmailRequired: false,
-        autoInject: true, // This ensures the default button is injected
-      }),
-    ],
-    tracesSampleRate: 1.0,
-  });
+// Initialize Sentry asynchronously from server config
+async function initSentry() {
+  try {
+    const response = await fetch('/api/sentry-config');
+    const config = await response.json();
+
+    const dsn = config.dsn || import.meta.env.VITE_SENTRY_DSN;
+    if (dsn) {
+      Sentry.init({
+        dsn: dsn,
+        environment: config.environment || "",
+        integrations: [
+          Sentry.feedbackIntegration({
+            colorScheme: "dark",
+            isNameRequired: false,
+            isEmailRequired: false,
+            autoInject: true,
+          }),
+        ],
+        tracesSampleRate: 1.0,
+      });
+      console.log('Sentry initialized with environment:', config.environment || 'none');
+    }
+  } catch (e) {
+    console.error('Failed to initialize Sentry:', e);
+  }
 }
+
+initSentry();
 
 document.querySelector('#app').innerHTML = `
   <canvas id="gameCanvas"></canvas>

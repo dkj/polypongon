@@ -105,22 +105,19 @@ app.get('/api/instance', (req, res) => {
   res.json({ instanceId, isFlyInstance });
 });
 
+app.get('/api/sentry-config', (req, res) => {
+  res.json({
+    dsn: process.env.VITE_SENTRY_DSN || '',
+    environment: process.env.SENTRY_ENVIRONMENT || ''
+  });
+});
+
 // Static file serving (catch-all routes last)
 const distPath = path.resolve(__dirname, '../dist');
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath, { index: false }));
+  app.use(express.static(distPath));
   app.get(/^.*$/, (_req, res) => {
-    try {
-      let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
-      const dsn = process.env.VITE_SENTRY_DSN || '';
-      const env = process.env.SENTRY_ENVIRONMENT || '';
-      html = html.replace('__VITE_SENTRY_DSN__', dsn);
-      html = html.replace('__SENTRY_ENVIRONMENT__', env);
-      res.send(html);
-    } catch (err) {
-      console.error('Error serving index.html:', err);
-      res.status(500).send('Server Error');
-    }
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
   console.warn(`Static assets not found at ${distPath}.Only socket services will be available.`);
