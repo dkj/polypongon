@@ -113,7 +113,9 @@ if (fs.existsSync(distPath)) {
     try {
       let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
       const dsn = process.env.VITE_SENTRY_DSN || '';
+      const env = process.env.SENTRY_ENVIRONMENT || '';
       html = html.replace('__VITE_SENTRY_DSN__', dsn);
+      html = html.replace('__SENTRY_ENVIRONMENT__', env);
       res.send(html);
     } catch (err) {
       console.error('Error serving index.html:', err);

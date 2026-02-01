@@ -12,6 +12,7 @@ const SENTRY_DSN = (window.VITE_SENTRY_DSN && window.VITE_SENTRY_DSN !== "__VITE
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
+    environment: window.SENTRY_ENVIRONMENT || "",
     integrations: [
       Sentry.feedbackIntegration({
         colorScheme: "dark",
