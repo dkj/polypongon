@@ -2,6 +2,24 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { Game } from './game/Game.js';
 import { ShareManager } from './ShareManager.js';
+import * as Sentry from "@sentry/browser";
+
+// Initialize Sentry only if DSN is provided
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    integrations: [
+      Sentry.feedbackIntegration({
+        colorScheme: "dark",
+        isNameRequired: false,
+        isEmailRequired: false,
+        autoInject: true, // This ensures the default button is injected
+      }),
+    ],
+    tracesSampleRate: 1.0,
+  });
+}
 
 document.querySelector('#app').innerHTML = `
   <canvas id="gameCanvas"></canvas>

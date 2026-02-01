@@ -1,4 +1,5 @@
 import express from 'express';
+import * as Sentry from "@sentry/node"; // Still need Sentry for error handler setup
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
@@ -11,6 +12,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Set up Sentry error handler if DSN is provided
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
 const httpServer = createServer(app);
 
 // Get Fly.io instance information
@@ -118,67 +125,87 @@ io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id} on instance ${instanceId}`);
 
   socket.on('joinRoom', (data) => {
-    // Support both old string format and new object format
-    const roomId = typeof data === 'string' ? data : data.roomId;
-    const requestedInstance = typeof data === 'object' ? data.instance : null;
+    try {
+      // Support both old string format and new object format
+      const roomId = typeof data === 'string' ? data : data.roomId;
+      const requestedInstance = typeof data === 'object' ? data.instance : null;
 
-    // Verify we're on the right instance for this room
-    // Only enforced on Fly.io to allow local debugging
-    if (requestedInstance && requestedInstance !== instanceId && isFlyInstance) {
-      console.warn(`Room ${roomId} attempting to join wrong instance. Expected ${requestedInstance}, running ${instanceId}`);
-      socket.emit('error', {
-        message: 'Connected to wrong instance',
-        expectedInstance: requestedInstance,
-        currentInstance: instanceId
-      });
-      socket.disconnect();
-      return;
-    }
-
-    socket.join(roomId);
-    console.log(`User ${socket.id} joined room ${roomId} on instance ${instanceId}`);
-
-    if (!games.has(roomId)) {
-      console.log(`Creating new game for room ${roomId} on instance ${instanceId} `);
-      const game = new ServerGame(io, roomId);
-      games.set(roomId, game);
-      game.start();
-    }
-
-    const game = games.get(roomId);
-    const playerIndex = game.addPlayer(socket.id);
-
-    socket.emit('init', {
-      playerIndex,
-      sides: game.polygon.sides,
-      instanceId // Send back the instance ID for confirmation
-    });
-
-    // Handle input for this specific game
-    socket.removeAllListeners('input');
-    socket.on('input', (data) => {
-      if (game) game.handleInput(socket.id, data.dir);
-    });
-
-    socket.removeAllListeners('playerReady');
-    socket.on('playerReady', (data) => {
-      if (game) game.toggleReady(socket.id, data.ready);
-    });
-
-    // Handle disconnect specifically for this room context
-    socket.on('disconnect', () => {
-      console.log('user disconnected', socket.id);
-      if (game) {
-        game.removePlayer(socket.id);
-
-        // Clean up the game ONLY if no players remain
-        if (game.players.size === 0) {
-          game.stop();
-          games.delete(roomId);
-          console.log(`Game for room ${roomId} cleaned up(empty)`);
-        }
+      // Verify we're on the right instance for this room
+      // Only enforced on Fly.io to allow local debugging
+      if (requestedInstance && requestedInstance !== instanceId && isFlyInstance) {
+        console.warn(`Room ${roomId} attempting to join wrong instance. Expected ${requestedInstance}, running ${instanceId}`);
+        socket.emit('error', {
+          message: 'Connected to wrong instance',
+          expectedInstance: requestedInstance,
+          currentInstance: instanceId
+        });
+        socket.disconnect();
+        return;
       }
-    });
+
+      socket.join(roomId);
+      console.log(`User ${socket.id} joined room ${roomId} on instance ${instanceId}`);
+
+      if (!games.has(roomId)) {
+        console.log(`Creating new game for room ${roomId} on instance ${instanceId} `);
+        const game = new ServerGame(io, roomId);
+        games.set(roomId, game);
+        game.start();
+      }
+
+      const game = games.get(roomId);
+      const playerIndex = game.addPlayer(socket.id);
+
+      socket.emit('init', {
+        playerIndex,
+        sides: game.polygon.sides,
+        instanceId // Send back the instance ID for confirmation
+      });
+
+      // Handle input for this specific game
+      socket.removeAllListeners('input');
+      socket.on('input', (data) => {
+        try {
+          if (game) game.handleInput(socket.id, data.dir);
+        } catch (err) {
+          console.error('Input error:', err);
+          if (process.env.SENTRY_DSN) Sentry.captureException(err);
+        }
+      });
+
+      socket.removeAllListeners('playerReady');
+      socket.on('playerReady', (data) => {
+        try {
+          if (game) game.toggleReady(socket.id, data.ready);
+        } catch (err) {
+          console.error('PlayerReady error:', err);
+          if (process.env.SENTRY_DSN) Sentry.captureException(err);
+        }
+      });
+
+      // Handle disconnect specifically for this room context
+      socket.on('disconnect', () => {
+        try {
+          console.log('user disconnected', socket.id);
+          if (game) {
+            game.removePlayer(socket.id);
+
+            // Clean up the game ONLY if no players remain
+            if (game.players.size === 0) {
+              game.stop();
+              games.delete(roomId);
+              console.log(`Game for room ${roomId} cleaned up(empty)`);
+            }
+          }
+        } catch (err) {
+          console.error('Disconnect error:', err);
+          if (process.env.SENTRY_DSN) Sentry.captureException(err);
+        }
+      });
+    } catch (err) {
+      console.error('JoinRoom error:', err);
+      if (process.env.SENTRY_DSN) Sentry.captureException(err);
+    }
   });
 });
 
