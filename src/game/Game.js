@@ -16,6 +16,7 @@ export class Game extends BaseGame {
         this.mode = 'local'; // 'local' or 'online'
         this.socket = null;
         this.playerIndex = -1;
+        this.lastBounceClaim = 0;
 
         this.finalTime = 0;
         this.hasPlayed = false;
@@ -256,17 +257,25 @@ export class Game extends BaseGame {
             }
 
             // 2. Only snap position if deviation is large (reconciliation)
-            // or if we haven't recently claimed a bounce (to avoid server overriding our local bounce)
+            // UNLESS we recently claimed a bounce (within last 500ms).
+            // In that case, we trust our local physics because the server state is likely from "before" the bounce.
+            const timeSinceBounce = performance.now() - this.lastBounceClaim;
+            const isRecentBounce = timeSinceBounce < 500;
+
             const dx = this.ball.x - state.ball.x;
             const dy = this.ball.y - state.ball.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // If deviation is significant (> 10px), snap. Otherwise trust local physics (smoothing).
-            if (dist > 10) {
+            // If we just bounced, we expect a large deviation (local ball moving away, server ball coming in).
+            // So we ignore server updates unless they are MASSIVELY off (desync > 50px).
+            const snapThreshold = isRecentBounce ? 80 : 10;
+
+            // If deviation is significant, snap. Otherwise trust local physics (smoothing).
+            if (dist > snapThreshold) {
                 this.ball.x = state.ball.x;
                 this.ball.y = state.ball.y;
-            } else {
-                // Lerp slightly towards server position?
+            } else if (!isRecentBounce) {
+                // Only lerp if NOT a recent bounce. Lerping during a bounce causes "fighting".
                 this.ball.x += (state.ball.x - this.ball.x) * 0.1;
                 this.ball.y += (state.ball.y - this.ball.y) * 0.1;
             }
@@ -457,13 +466,22 @@ export class Game extends BaseGame {
         if (this.mode === 'local') {
             this.update(dt);
         } else {
+            const prevBallX = this.ball.x;
+            const prevBallY = this.ball.y;
+
             this.handleOnlineInput(dt);
+
             // Run Client-Side Prediction for smooth visuals
             // 1. Update rotation/difficulty
             this.updateGameRules(dt);
             // 2. Predict ball movement between server updates
             if (this.gameState === 'PLAYING' || (this.gameState === 'SCORING' && this.celebrationTimer > 0)) {
                 this.ball.update(dt);
+            }
+
+            // 3. Run collision detection to trigger bounces (and client claims)
+            if (this.gameState === 'PLAYING') {
+                this.checkCollisions(prevBallX, prevBallY);
             }
         }
 
@@ -501,6 +519,7 @@ export class Game extends BaseGame {
 
         // Client Authority: Inform server we hit the ball
         if (this.mode === 'online' && this.socket && edgeIndex === this.playerIndex) {
+            this.lastBounceClaim = performance.now();
             this.socket.emit('bounce_claim', {
                 ball: {
                     x: this.ball.x,

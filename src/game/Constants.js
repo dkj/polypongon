@@ -10,5 +10,5 @@ export const GAME_CONSTANTS = {
     COLLISION_GRACE: 1.1,
     GAME_FPS: 60,
     COUNTDOWN_DURATION: 3,
-    GOAL_GRACE_PERIOD: 0.25 // Seconds to wait for bounce_claim after a server-side goal detection
+    GOAL_GRACE_PERIOD: 0.6 // Seconds to wait for bounce_claim after a server-side goal detection
 };
