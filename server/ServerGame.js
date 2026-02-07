@@ -89,7 +89,7 @@ export class ServerGame extends BaseGame {
         this.running = false;
         clearInterval(this.interval);
 
-        this.io.to(this.roomId).emit('gameTerminated', {
+        this.emitToRoom('gameTerminated', {
             reason: reason,
             lastScore: this.score,
             finalTime: Math.floor(this.timeElapsed)
@@ -161,11 +161,11 @@ export class ServerGame extends BaseGame {
     // --- Hooks ---
     onPaddleHit(edgeIndex) {
         super.onPaddleHit(edgeIndex);
-        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce', edgeIndex });
+        this.emitToRoom('gameEvent', { type: 'bounce', edgeIndex });
     }
 
     onWallBounce(edgeIndex) {
-        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce', edgeIndex });
+        this.emitToRoom('gameEvent', { type: 'bounce', edgeIndex });
     }
 
     onGoal(edgeIndex) {
@@ -178,7 +178,7 @@ export class ServerGame extends BaseGame {
         this.lastScore = finalScore;
         this.finalTime = Math.floor(this.timeElapsed);
 
-        this.io.to(this.roomId).emit('gameEvent', {
+        this.emitToRoom('gameEvent', {
             type: 'goal',
             score: this.lastScore,
             time: this.finalTime,
@@ -218,8 +218,19 @@ export class ServerGame extends BaseGame {
         }
     }
 
+    emitToRoom(event, data) {
+        const latency = parseInt(process.env.SIMULATED_LATENCY_MS || '0', 10);
+        if (latency > 0) {
+            setTimeout(() => {
+                this.io.to(this.roomId).emit(event, data);
+            }, latency);
+        } else {
+            this.io.to(this.roomId).emit(event, data);
+        }
+    }
+
     broadcastState() {
-        this.io.to(this.roomId).emit('gameState', {
+        this.emitToRoom('gameState', {
             ball: { x: this.ball.x, y: this.ball.y },
             rotation: this.polygon.rotation,
             rotationDirection: this.rotationDirection,

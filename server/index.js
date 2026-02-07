@@ -169,25 +169,39 @@ io.on('connection', (socket) => {
         instanceId // Send back the instance ID for confirmation
       });
 
+      // Helper for simulated latency
+      const simulateLatency = (fn) => {
+        const latency = parseInt(process.env.SIMULATED_LATENCY_MS || '0', 10);
+        if (latency > 0) {
+          setTimeout(fn, latency);
+        } else {
+          fn();
+        }
+      };
+
       // Handle input for this specific game
       socket.removeAllListeners('input');
       socket.on('input', (data) => {
-        try {
-          if (game) game.handleInput(socket.id, data.dir);
-        } catch (err) {
-          console.error('Input error:', err);
-          if (process.env.SENTRY_DSN) Sentry.captureException(err);
-        }
+        simulateLatency(() => {
+          try {
+            if (game) game.handleInput(socket.id, data.dir);
+          } catch (err) {
+            console.error('Input error:', err);
+            if (process.env.SENTRY_DSN) Sentry.captureException(err);
+          }
+        });
       });
 
       socket.removeAllListeners('playerReady');
       socket.on('playerReady', (data) => {
-        try {
-          if (game) game.toggleReady(socket.id, data.ready);
-        } catch (err) {
-          console.error('PlayerReady error:', err);
-          if (process.env.SENTRY_DSN) Sentry.captureException(err);
-        }
+        simulateLatency(() => {
+          try {
+            if (game) game.toggleReady(socket.id, data.ready);
+          } catch (err) {
+            console.error('PlayerReady error:', err);
+            if (process.env.SENTRY_DSN) Sentry.captureException(err);
+          }
+        });
       });
 
       // Handle disconnect specifically for this room context

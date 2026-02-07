@@ -10,6 +10,7 @@
     "test:physics": "node test/physics_test.js",
     "test:gameplay": "node test/gameplay_test.js",
     "test:verification": "node test/verification_test.js",
+    "test:latency": "node test/latency_simulation_test.js",
     "test:browser": "playwright test",
     "dev": "vite",
     "build": "vite build",
