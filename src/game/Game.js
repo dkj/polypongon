@@ -16,7 +16,10 @@ export class Game extends BaseGame {
         this.mode = 'local'; // 'local' or 'online'
         this.socket = null;
         this.playerIndex = -1;
+        this.playerIndex = -1;
         this.lastBounceClaim = 0;
+        this.lastBounceTime = 0;
+        this.lastGoalTime = 0;
 
         this.finalTime = 0;
         this.hasPlayed = false;
@@ -286,14 +289,9 @@ export class Game extends BaseGame {
             this.polygon.updateVertices();
 
             // Setup paddles from server data
-            // Setup paddles from server data, BUT preserve local player's predicted position
-            // Creating new Paddle instances every frame is expensive in JS, better to update existing ones.
-            // But aligned with original code style:
-
             const newPaddles = state.paddles.map(pData => {
                 if (pData.edgeIndex === this.playerIndex) {
                     // It's ME! Keep my local state (Position is predicted locally)
-                    // But maybe sync width?
                     const myPaddle = this.paddles.find(p => p.edgeIndex === this.playerIndex);
                     if (myPaddle) {
                         // Only update width if server says so (e.g. difficulty change)
@@ -303,8 +301,16 @@ export class Game extends BaseGame {
                 }
 
                 // For others, use server state
-                const p = new Paddle(pData.edgeIndex);
-                p.position = pData.position;
+                // Reuse existing paddle instance if possible to avoid rapid GC
+                let p = this.paddles.find(existing => existing.edgeIndex === pData.edgeIndex);
+                if (!p) {
+                    p = new Paddle(pData.edgeIndex);
+                }
+
+                // IMPORTANT: Ensure position is applied!
+                if (pData.position !== undefined) {
+                    p.position = pData.position;
+                }
                 p.width = pData.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
                 return p;
             });
@@ -338,19 +344,31 @@ export class Game extends BaseGame {
                 this.countdownTimer = state.countdownTimer;
             } else if (state.gameState === 'COUNTDOWN' && previousState !== 'COUNTDOWN') {
                 this.countdownTimer = 3;
+                // Force input resync on game start/restart
+                // The server resets paddle movement to 0, so if we are holding a key, we MUST tell it again.
+                this.lastDir = null;
             }
         });
 
         this.socket.on('gameEvent', (event) => {
+            const now = performance.now();
             if (event.type === 'bounce') {
-                this.audio.playBounce();
-                if (event.edgeIndex !== undefined) {
-                    this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(event.edgeIndex));
+                // Deduplicate: If we predicted a bounce recently (200ms), ignore server sound
+                if (now - this.lastBounceTime > 200) {
+                    this.audio.playBounce();
+                    if (event.edgeIndex !== undefined) {
+                        this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(event.edgeIndex));
+                    }
                 }
             }
             if (event.type === 'goal') {
-                this.flashEffect('rgba(239, 68, 68, 0.4)');
-                this.audio.playGoal();
+                const now = performance.now();
+                // Deduplicate: If we predicted a goal recently (1000ms), ignore server sound/flash
+                if (now - this.lastGoalTime > 1000) {
+                    this.flashEffect('rgba(239, 68, 68, 0.4)');
+                    this.audio.playGoal();
+                }
+
                 if (this.ball) {
                     this.ball.maxTrailLength = 200;
                 }
@@ -514,6 +532,7 @@ export class Game extends BaseGame {
 
     onPaddleHit(edgeIndex) {
         super.onPaddleHit(edgeIndex);
+        this.lastBounceTime = performance.now();
         this.audio.playBounce();
         this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(edgeIndex));
 
@@ -533,11 +552,14 @@ export class Game extends BaseGame {
     }
 
     onWallBounce(edgeIndex) {
+        super.onWallBounce(edgeIndex);
+        this.lastBounceTime = performance.now();
         this.audio.playBounce();
         this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(edgeIndex), 5);
     }
 
     onGoal(_edgeIndex) {
+        this.lastGoalTime = performance.now();
         this.audio.playGoal();
         this.flashEffect('rgba(239, 68, 68, 0.4)');
         if (this.ball) {
