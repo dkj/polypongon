@@ -248,26 +248,58 @@ export class Game extends BaseGame {
 
         this.socket.on('gameState', (state) => {
             // APPLY STATE DIRECTLY
-            this.ball.x = state.ball.x;
-            this.ball.y = state.ball.y;
+            // Client Prediction / Reconciliation for Ball
+            // 1. Update velocity for future frames
+            if (state.ball.vx !== undefined) {
+                this.ball.vx = state.ball.vx;
+                this.ball.vy = state.ball.vy;
+            }
+
+            // 2. Only snap position if deviation is large (reconciliation)
+            // or if we haven't recently claimed a bounce (to avoid server overriding our local bounce)
+            const dx = this.ball.x - state.ball.x;
+            const dy = this.ball.y - state.ball.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // If deviation is significant (> 10px), snap. Otherwise trust local physics (smoothing).
+            if (dist > 10) {
+                this.ball.x = state.ball.x;
+                this.ball.y = state.ball.y;
+            } else {
+                // Lerp slightly towards server position?
+                this.ball.x += (state.ball.x - this.ball.x) * 0.1;
+                this.ball.y += (state.ball.y - this.ball.y) * 0.1;
+            }
+
             this.ball.updateTrail();
 
             this.polygon.rotation = state.rotation;
             this.polygon.updateVertices();
 
             // Setup paddles from server data
-            this.paddles = state.paddles.map(pData => {
-                // If this is our paddle, we already moved it based on input in handleOnlineInput
-                // But for the simplest model, we just snap to server truth for now.
-                // Optionally keep client prediction by filtering out our own index if we want it super responsive.
-                // User said "simplest possible earlier multiplayer model". 
-                // Earlier models usually just snapped other paddles and predicted own.
+            // Setup paddles from server data, BUT preserve local player's predicted position
+            // Creating new Paddle instances every frame is expensive in JS, better to update existing ones.
+            // But aligned with original code style:
 
+            const newPaddles = state.paddles.map(pData => {
+                if (pData.edgeIndex === this.playerIndex) {
+                    // It's ME! Keep my local state (Position is predicted locally)
+                    // But maybe sync width?
+                    const myPaddle = this.paddles.find(p => p.edgeIndex === this.playerIndex);
+                    if (myPaddle) {
+                        // Only update width if server says so (e.g. difficulty change)
+                        myPaddle.width = pData.width ?? myPaddle.width;
+                        return myPaddle;
+                    }
+                }
+
+                // For others, use server state
                 const p = new Paddle(pData.edgeIndex);
                 p.position = pData.position;
                 p.width = pData.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
                 return p;
             });
+            this.paddles = newPaddles;
 
             this.difficulty = state.difficulty;
             this.rotationDirection = state.rotationDirection;
@@ -426,6 +458,13 @@ export class Game extends BaseGame {
             this.update(dt);
         } else {
             this.handleOnlineInput(dt);
+            // Run Client-Side Prediction for smooth visuals
+            // 1. Update rotation/difficulty
+            this.updateGameRules(dt);
+            // 2. Predict ball movement between server updates
+            if (this.gameState === 'PLAYING' || (this.gameState === 'SCORING' && this.celebrationTimer > 0)) {
+                this.ball.update(dt);
+            }
         }
 
         // In online mode, we still need to decrement celebrationTimer locally for smooth visual effects
@@ -459,6 +498,19 @@ export class Game extends BaseGame {
         super.onPaddleHit(edgeIndex);
         this.audio.playBounce();
         this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(edgeIndex));
+
+        // Client Authority: Inform server we hit the ball
+        if (this.mode === 'online' && this.socket && edgeIndex === this.playerIndex) {
+            this.socket.emit('bounce_claim', {
+                ball: {
+                    x: this.ball.x,
+                    y: this.ball.y,
+                    vx: this.ball.vx,
+                    vy: this.ball.vy
+                },
+                edgeIndex
+            });
+        }
     }
 
     onWallBounce(edgeIndex) {
@@ -480,7 +532,8 @@ export class Game extends BaseGame {
     handleOnlineInput(dt) {
         if (!this.socket) return;
 
-        super.updateGameRules(dt);
+        // Removed super.updateGameRules(dt) from here as it's now called in loop()
+        // to ensure it runs every frame for prediction consistency.
 
         if (this.gameState === 'SCORING') return;
 
@@ -501,6 +554,7 @@ export class Game extends BaseGame {
             this.lastDir = dir;
         }
     }
+
 
 
     getPlayerColor(index, alpha = 1) {

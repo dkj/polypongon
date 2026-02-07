@@ -204,6 +204,27 @@ io.on('connection', (socket) => {
         });
       });
 
+      socket.removeAllListeners('bounce_claim');
+      socket.on('bounce_claim', (data) => {
+        simulateLatency(() => {
+          try {
+            if (game) {
+              // Ensure the claim structure is handled
+              const validClaim = typeof data === 'object' && data.ball && data.edgeIndex !== undefined;
+              if (validClaim) {
+                game.handleBounceClaim(socket.id, {
+                  ball: data.ball,
+                  edgeIndex: data.edgeIndex
+                });
+              }
+            }
+          } catch (err) {
+            console.error('BounceClaim error:', err);
+            if (process.env.SENTRY_DSN) Sentry.captureException(err);
+          }
+        });
+      });
+
       // Handle disconnect specifically for this room context
       socket.on('disconnect', () => {
         try {

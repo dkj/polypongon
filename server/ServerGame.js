@@ -16,6 +16,7 @@ export class ServerGame extends BaseGame {
         this.lastTime = 0;
 
         this.scoreDisplayTimer = 0;
+        this.pendingGoal = null; // { edgeIndex, timer }
     }
 
     addPlayer(socketId) {
@@ -96,6 +97,35 @@ export class ServerGame extends BaseGame {
         });
     }
 
+    handleBounceClaim(socketId, claim) {
+        if (!this.players.has(socketId)) return;
+        const index = this.players.get(socketId);
+
+        // Security: Ensure claim matches player's edge
+        if (claim.edgeIndex !== index) {
+            console.warn(`Player ${socketId} claimed bounce for wrong edge ${claim.edgeIndex}`);
+            return;
+        }
+
+        // Logic: Always accept the bounce claim if consistent
+        // (We could add strict distance checks here, but for now we trust the client)
+
+        // 1. Update ball state to match claim
+        this.ball.x = claim.ball.x;
+        this.ball.y = claim.ball.y;
+        this.ball.vx = claim.ball.vx;
+        this.ball.vy = claim.ball.vy;
+
+        // 2. Broadcast the bounce immediately so others see it
+        this.onPaddleHit(index);
+
+        // 3. CANCEL any pending goal (the "save")
+        if (this.pendingGoal && this.pendingGoal.edgeIndex === index) {
+            console.log(`Goal averted by client authority claim on edge ${index}`);
+            this.pendingGoal = null;
+        }
+    }
+
     handleInput(socketId, dir) {
         if (this.gameState === 'SCORING') return;
 
@@ -132,6 +162,9 @@ export class ServerGame extends BaseGame {
             }
 
             this.update(dt);
+
+
+
             this.broadcastState();
         } catch (e) {
             console.error('ServerGame Loop Error:', e);
@@ -151,6 +184,16 @@ export class ServerGame extends BaseGame {
                 p.move(p.moveDirection, dt);
             }
         });
+
+        // Check pending goal expiration
+        if (this.pendingGoal) {
+            this.pendingGoal.timer -= dt;
+            if (this.pendingGoal.timer <= 0) {
+                const idx = this.pendingGoal.edgeIndex;
+                this.pendingGoal = null;
+                this.triggerScore(this.score, idx); // Confirmed goal
+            }
+        }
     }
 
     onCelebrationEnd() {
@@ -169,7 +212,15 @@ export class ServerGame extends BaseGame {
     }
 
     onGoal(edgeIndex) {
-        this.triggerScore(this.score, edgeIndex);
+        // If we already have a pending goal, ignore new ones (ball just passing through multiple)
+        if (this.pendingGoal) return;
+
+        // Start grace period for client to claim bounce
+        this.pendingGoal = {
+            edgeIndex,
+            timer: GAME_CONSTANTS.GOAL_GRACE_PERIOD || 0.25
+        };
+        // Don't trigger score yet!
     }
     // -------------
 
@@ -196,6 +247,8 @@ export class ServerGame extends BaseGame {
             this.setGameState('COUNTDOWN');
 
             this.resetState(); // BaseGame reset
+            this.resetState(); // BaseGame reset
+            this.pendingGoal = null;
             this.readyEdges.clear();
 
             // Reset server-specific paddle state
@@ -231,7 +284,7 @@ export class ServerGame extends BaseGame {
 
     broadcastState() {
         this.emitToRoom('gameState', {
-            ball: { x: this.ball.x, y: this.ball.y },
+            ball: { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy },
             rotation: this.polygon.rotation,
             rotationDirection: this.rotationDirection,
             paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position, width: p.width })),
