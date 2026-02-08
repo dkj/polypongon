@@ -182,15 +182,32 @@ export class ServerGame extends BaseGame {
             return;
         }
 
-        // Only count hits if the server is actually in the PLAYING state
-        if (this.gameState !== 'PLAYING') return;
+        // Only count hits if the server is actually in the PLAYING state and not celebrating
+        if (this.gameState !== 'PLAYING' || this.celebrationTimer > 0) {
+            // Optional: log if hit arrives in COUNTDOWN to help debug sync
+            if (this.gameState === 'COUNTDOWN') {
+                console.warn(`Client ${socketId} reported hit during COUNTDOWN`);
+            }
+            return;
+        }
 
         // Increment server score
         this.score++;
 
-        // We do NOT emit 'gameEvent' (bounce) here because clients 
-        // handle bounce sounds optimistically. 
-        // This server score is just for the HUD and final state.
+        // Update server's ball state to match the authoritative hitter
+        // This keeps the server's "joiner baseline" accurate
+        if (data.ball) {
+            this.ball.x = data.ball.x;
+            this.ball.y = data.ball.y;
+            this.ball.vx = data.ball.vx;
+            this.ball.vy = data.ball.vy;
+        }
+
+        // Broadcast the hit to everyone else for sound/particles 
+        this.emitToRoom('gameEvent', {
+            type: 'bounce',
+            edgeIndex: data.edgeIndex
+        });
     }
     // -------------
 

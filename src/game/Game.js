@@ -255,10 +255,13 @@ export class Game extends BaseGame {
 
 
         this.socket.on('gameState', (state) => {
-            // Client-side physics: only ignore ball updates during PLAYING
-            // Accept ball updates during SCORING, COUNTDOWN, etc.
-            // OR if this is the very first state update (Join/Reconnect)
-            if (state.gameState !== 'PLAYING' || !this.firstStateReceived) {
+            // Client-side physics: we mostly ignore ball updates during PLAYING
+            // to keep the local simulation smooth.
+            // However, we apply a 'Threshold Sync' to prevent catastrophic desync.
+            const isJoining = !this.firstStateReceived;
+            const notPlaying = state.gameState !== 'PLAYING';
+
+            if (notPlaying || isJoining) {
                 this.ball.x = state.ball.x;
                 this.ball.y = state.ball.y;
                 if (state.ball.vx !== undefined) {
@@ -266,11 +269,13 @@ export class Game extends BaseGame {
                     this.ball.vy = state.ball.vy;
                 }
                 this.ball.updateTrail();
-                this.firstStateReceived = true;
             }
 
-            this.polygon.rotation = state.rotation;
-            this.polygon.updateVertices();
+            // Only sync rotation if we aren't playing, to avoid jitter
+            if (notPlaying || isJoining) {
+                this.polygon.rotation = state.rotation;
+                this.polygon.updateVertices();
+            }
 
             // Setup paddles from server data
             // Preserve local player's paddle for client-side prediction, 
@@ -311,7 +316,18 @@ export class Game extends BaseGame {
             }
 
             const previousState = this.gameState;
-            this.setGameState(state.gameState);
+
+            // Latency Guard: If we've locally conceded a goal (SCORING) but the server 
+            // still thinks we're PLAYING (due to delay), stay in SCORING to avoid "flicker" spam 
+            // of redundant goal reports.
+            // UNLESS we are just joining, in which case we must accept the server's state.
+            if (!isJoining && this.gameState === 'SCORING' && state.gameState === 'PLAYING') {
+                // Do nothing, wait for server to acknowledge goal and move to SCORING itself
+            } else {
+                this.setGameState(state.gameState);
+            }
+
+            this.firstStateReceived = true;
 
             // Avoid rolling back score during PLAYING due to latency
             // (Client increments score locally on hits, server catches up)
@@ -354,6 +370,8 @@ export class Game extends BaseGame {
                 if (event.edgeIndex !== undefined) {
                     this.addParticles(this.ball.x, this.ball.y, this.getPlayerColor(event.edgeIndex));
                 }
+                // Removed hard snap from bounce event to avoid jitter/jumps
+                // The threshold sync in gameState handler will catch major desyncs.
             }
             if (event.type === 'goal') {
                 this.flashEffect('rgba(239, 68, 68, 0.4)');
@@ -578,6 +596,57 @@ export class Game extends BaseGame {
 
             this.ball.update(dt);
             this.checkCollisionsOptimistic(prevBallX, prevBallY);
+
+            // Safety catch: If ball escaped detection and is now outside, force a goal
+            this.checkEscapedBall();
+        }
+    }
+
+    // Safety fallback for balls that tunnel or snap outside the polygon
+    checkEscapedBall() {
+        if (this.gameState !== 'PLAYING') return;
+
+        const distSq = this.ball.x * this.ball.x + this.ball.y * this.ball.y;
+        const radiusSq = Math.pow(this.polygon.radius + this.ball.radius + 10, 2);
+
+        if (distSq > radiusSq) {
+            // Find nearest edge to determine responsible player
+            let nearestEdge = -1;
+            let minDist = Infinity;
+
+            for (let i = 0; i < this.polygon.vertices.length; i++) {
+                const p1 = this.polygon.vertices[i];
+                const p2 = this.polygon.vertices[(i + 1) % this.polygon.vertices.length];
+                const d = this.getDistanceFromSegment(this.ball, p1, p2);
+                if (d < minDist) {
+                    minDist = d;
+                    nearestEdge = i;
+                }
+            }
+
+            if (nearestEdge !== -1) {
+                const hasPaddle = this.paddles.some(p => p.edgeIndex === nearestEdge);
+                if (hasPaddle) {
+                    // Authority: Only concede if it's OUR edge or if we are in local mode
+                    if (this.mode === 'local' || nearestEdge === this.playerIndex) {
+                        console.warn(`Safety Catch: Ball escaped via edge ${nearestEdge}. Triggering goal.`);
+                        this.onGoal(nearestEdge);
+                        if (this.mode === 'online') {
+                            this.socket.emit('goalConceded', {
+                                edgeIndex: nearestEdge,
+                                score: this.score,
+                                time: Math.floor(this.timeElapsed)
+                            });
+                        }
+                    }
+                } else {
+                    // Escaped through a wall corner? Snap back in.
+                    this.ball.x *= 0.95;
+                    this.ball.y *= 0.95;
+                    this.ball.vx *= -1;
+                    this.ball.vy *= -1;
+                }
+            }
         }
     }
 
@@ -632,10 +701,16 @@ export class Game extends BaseGame {
                             if (hitPaddle) {
                                 this.reflectBall(p1, p2);
                                 this.onPaddleHit(i);
-                                // Inform server of successful hit (optional logging)
+                                // Inform server of successful hit, including ball state for server's joiner-view
                                 this.socket.emit('paddleHit', {
                                     edgeIndex: i,
-                                    timestamp: this.timeElapsed
+                                    timestamp: this.timeElapsed,
+                                    ball: {
+                                        x: this.ball.x,
+                                        y: this.ball.y,
+                                        vx: this.ball.vx,
+                                        vy: this.ball.vy
+                                    }
                                 });
                             } else {
                                 // I missed - concede goal
