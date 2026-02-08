@@ -312,7 +312,14 @@ export class Game extends BaseGame {
 
             const previousState = this.gameState;
             this.setGameState(state.gameState);
-            this.score = state.score;
+
+            // Avoid rolling back score during PLAYING due to latency
+            // (Client increments score locally on hits, server catches up)
+            if (this.gameState === 'PLAYING') {
+                this.score = Math.max(this.score, state.score);
+            } else {
+                this.score = state.score;
+            }
             this.lastScore = state.lastScore;
             this.finalTime = state.finalTime || 0;
             this.timeElapsed = state.timeElapsed || 0;
