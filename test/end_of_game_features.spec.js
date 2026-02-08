@@ -65,6 +65,15 @@ test.describe('End of Game Features', () => {
             // Wait for the async goOnline handler to finish setting the mode
             await page.waitForFunction(() => window.game.mode === 'online');
 
+            // 0. Disable real updates to prevent race condition
+            await page.evaluate(() => {
+                const s = window.game.socket;
+                if (s) {
+                    s.io.reconnection(false); // Stop trying to reconnect
+                    s.io.engine.close();      // Close transport immediately
+                }
+            });
+
             // Simulate receiving goal event and states
             await page.evaluate(() => {
                 // Ensure share modal from going online is closed

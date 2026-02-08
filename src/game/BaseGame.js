@@ -20,6 +20,11 @@ export class BaseGame {
         this.countdownTimer = 0;
         this.celebrationTimer = 0;
         this.hasPlayed = false;
+
+        // Fixed Time Step
+        this.accumulator = 0;
+        this.fixedDt = 1 / GAME_CONSTANTS.GAME_FPS;
+        this.maxSteps = 5; // Prevent death spiral on lag
     }
 
     clearResults() {
@@ -113,7 +118,39 @@ export class BaseGame {
     }
 
     /**
-     * Standard game update loop.
+     * Standard game update loop with accumulator pattern.
+     * @param {number} dt Real time delta since last frame (in seconds)
+     */
+    step(dt) {
+        // Clamp dt to prevent spiral of death if tab was backgrounded or server lagged
+        if (dt > 0.25) dt = 0.25;
+
+        this.accumulator += dt;
+
+        // Consume accumulator in fixed steps
+        let steps = 0;
+        while (this.accumulator >= this.fixedDt && steps < this.maxSteps) {
+            this.fixedUpdate(this.fixedDt);
+            this.accumulator -= this.fixedDt;
+            steps++;
+        }
+
+        // If we still have too much accumulated time, discard it to avoid spiral
+        if (this.accumulator > this.fixedDt * this.maxSteps) {
+            this.accumulator = 0;
+        }
+    }
+
+    /**
+     * Physics update step (override this in subclasses)
+     * @param {number} dt Fixed delta time
+     */
+    fixedUpdate(dt) {
+        this.update(dt);
+    }
+
+    /**
+     * Legacy update method (called by fixedUpdate)
      * @param {number} dt 
      */
     update(dt) {

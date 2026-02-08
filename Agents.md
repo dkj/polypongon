@@ -18,6 +18,7 @@ AI Agents should update this file whenever a significant project lesson is learn
 3. **Refined Testing**:
     - **Partial Units**: Run `node test/<filename>.js` for targeted server tests.
     - **UI Only**: Run `npm run test:browser` for Playwright only.
+    - **Simulating Latency**: Set `SIMULATED_LATENCY_MS=<ms>` (e.g. 100) when running the server to simulate network delay on both inputs and game state updates. This aids in reproducing production lag.
 
 ## Running the Test Server
 To run a test server that provides both static files and the API/WebSocket services:

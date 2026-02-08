@@ -1,7 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { Paddle } from '../src/game/Paddle.js';
 import { BaseGame } from '../src/game/BaseGame.js';
-import { GAME_CONSTANTS } from '../src/game/Constants.js';
 
 export class ServerGame extends BaseGame {
     constructor(io, roomId) {
@@ -89,7 +88,7 @@ export class ServerGame extends BaseGame {
         this.running = false;
         clearInterval(this.interval);
 
-        this.io.to(this.roomId).emit('gameTerminated', {
+        this.emitToRoom('gameTerminated', {
             reason: reason,
             lastScore: this.score,
             finalTime: Math.floor(this.timeElapsed)
@@ -110,8 +109,9 @@ export class ServerGame extends BaseGame {
     start() {
         this.running = true;
         this.lastTime = performance.now();
-        const FPS = GAME_CONSTANTS.GAME_FPS;
-        this.interval = setInterval(() => this.loop(), 1000 / FPS);
+        // Run slightly faster than 60 FPS to ensure we always have time to process
+        // but not too fast to burn CPU. 1000/60 = 16.6ms. We'll aim for ~10ms.
+        this.interval = setInterval(() => this.loop(), 10);
     }
 
     stop() {
@@ -125,13 +125,7 @@ export class ServerGame extends BaseGame {
             let dt = (time - this.lastTime) / 1000;
             this.lastTime = time;
 
-            // Clamp dt to prevent simulation explosion (e.g. after pauses or lags)
-            if (dt > 0.1) {
-                // console.warn(`[ServerGame] Excessive dt detected: ${dt.toFixed(4)}s. Clamping to 0.1s.`);
-                dt = 0.1;
-            }
-
-            this.update(dt);
+            this.step(dt);
             this.broadcastState();
         } catch (e) {
             console.error('ServerGame Loop Error:', e);
@@ -142,10 +136,12 @@ export class ServerGame extends BaseGame {
         }
     }
 
-    update(dt) {
-        super.update(dt);
+    fixedUpdate(dt) {
+        // Run full physics on server so ball position is tracked for new joiners
+        // We'll make it "silent" by overriding the hooks below
+        super.fixedUpdate(dt);
 
-        // Update Paddles Movement (Server specific)
+        // Update Paddles Movement based on client input
         this.paddles.forEach(p => {
             if (p.moveDirection) {
                 p.move(p.moveDirection, dt);
@@ -153,32 +149,99 @@ export class ServerGame extends BaseGame {
         });
     }
 
+
+
     onCelebrationEnd() {
         super.onCelebrationEnd();
         this.checkAllReady();
     }
 
-    // --- Hooks ---
-    onPaddleHit(edgeIndex) {
-        super.onPaddleHit(edgeIndex);
-        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce', edgeIndex });
+    // --- Hooks (Quiet Server) ---
+    onPaddleHit(_edgeIndex) {
+        // Silent simulation: do nothing (don't increment score here, 
+        // wait for authoritative client paddleHit event)
     }
 
-    onWallBounce(edgeIndex) {
-        this.io.to(this.roomId).emit('gameEvent', { type: 'bounce', edgeIndex });
+    onWallBounce(_edgeIndex) {
+        // DO NOT emit gameEvent
     }
 
-    onGoal(edgeIndex) {
-        this.triggerScore(this.score, edgeIndex);
+    onGoal(_edgeIndex) {
+        // DO NOT triggerScore on server simulation - server trusts client goalConceded report
+        // This prevents "ghost goals" if server simulation differs from predicted client
+    }
+
+    // Client-authority: handle paddle hit from client to keep score sync
+    onClientPaddleHit(socketId, data) {
+        const playerEdge = this.players.get(socketId);
+        if (playerEdge === undefined) return;
+
+        // Verify the client is reporting their own edge
+        if (data.edgeIndex !== playerEdge) {
+            console.warn(`Client ${socketId} reported hit on wrong edge`);
+            return;
+        }
+
+        // Only count hits if the server is actually in the PLAYING state and not celebrating
+        if (this.gameState !== 'PLAYING' || this.celebrationTimer > 0) {
+            // Optional: log if hit arrives in COUNTDOWN to help debug sync
+            if (this.gameState === 'COUNTDOWN') {
+                console.warn(`Client ${socketId} reported hit during COUNTDOWN`);
+            }
+            return;
+        }
+
+        // Increment server score
+        this.score++;
+
+        // Update server's ball state to match the authoritative hitter
+        // This keeps the server's "joiner baseline" accurate
+        if (data.ball) {
+            this.ball.x = data.ball.x;
+            this.ball.y = data.ball.y;
+            this.ball.vx = data.ball.vx;
+            this.ball.vy = data.ball.vy;
+        }
+
+        // Broadcast the hit to everyone else for sound/particles 
+        this.emitToRoom('gameEvent', {
+            type: 'bounce',
+            edgeIndex: data.edgeIndex
+        });
     }
     // -------------
+
+    // Client-authority: handle goal concession from client
+    handleGoalConceded(socketId, data) {
+        const playerEdge = this.players.get(socketId);
+        if (playerEdge === undefined) return;
+
+        const { edgeIndex, score, time } = data;
+
+        // Verify the client is reporting their own edge
+        if (edgeIndex !== playerEdge) {
+            console.warn(`Client ${socketId} reported goal on wrong edge`);
+            return;
+        }
+
+        // Only process goals if the server is actually in the PLAYING state
+        if (this.gameState !== 'PLAYING') {
+            console.warn(`Client ${socketId} reported goal while server is in state ${this.gameState}`);
+            return;
+        }
+
+        console.log(`Player on edge ${edgeIndex} conceded goal. Server Score: ${this.score}, (Client reported: ${score}), Time: ${time}`);
+
+        // Trigger game over using the server's authoritative score
+        this.triggerScore(this.score, edgeIndex);
+    }
 
     triggerScore(finalScore, edgeIndex) {
         this.startCelebration();
         this.lastScore = finalScore;
         this.finalTime = Math.floor(this.timeElapsed);
 
-        this.io.to(this.roomId).emit('gameEvent', {
+        this.emitToRoom('gameEvent', {
             type: 'goal',
             score: this.lastScore,
             time: this.finalTime,
@@ -206,6 +269,7 @@ export class ServerGame extends BaseGame {
 
             // Critical: Reset loop timer to prevent massive dt frame on next loop
             this.lastTime = performance.now();
+            this.accumulator = 0;
 
             this.broadcastState();
         } catch (e) {
@@ -218,9 +282,20 @@ export class ServerGame extends BaseGame {
         }
     }
 
+    emitToRoom(event, data) {
+        const latency = parseInt(process.env.SIMULATED_LATENCY_MS || '0', 10);
+        if (latency > 0) {
+            setTimeout(() => {
+                this.io.to(this.roomId).emit(event, data);
+            }, latency);
+        } else {
+            this.io.to(this.roomId).emit(event, data);
+        }
+    }
+
     broadcastState() {
-        this.io.to(this.roomId).emit('gameState', {
-            ball: { x: this.ball.x, y: this.ball.y },
+        this.emitToRoom('gameState', {
+            ball: { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy },
             rotation: this.polygon.rotation,
             rotationDirection: this.rotationDirection,
             paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position, width: p.width })),
