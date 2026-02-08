@@ -204,10 +204,10 @@ export class ServerGame extends BaseGame {
             return;
         }
 
-        console.log(`Player on edge ${edgeIndex} conceded goal. Score: ${score}, Time: ${time}`);
+        console.log(`Player on edge ${edgeIndex} conceded goal. Server Score: ${this.score}, (Client reported: ${score}), Time: ${time}`);
 
-        // Trigger game over
-        this.triggerScore(score, edgeIndex);
+        // Trigger game over using the server's authoritative score
+        this.triggerScore(this.score, edgeIndex);
     }
 
     triggerScore(finalScore, edgeIndex) {
