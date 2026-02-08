@@ -204,6 +204,19 @@ io.on('connection', (socket) => {
         });
       });
 
+      // Handle paddle hits to keep score in sync
+      socket.removeAllListeners('paddleHit');
+      socket.on('paddleHit', (data) => {
+        simulateLatency(() => {
+          try {
+            if (game) game.onClientPaddleHit(socket.id, data);
+          } catch (err) {
+            console.error('PaddleHit error:', err);
+            if (process.env.SENTRY_DSN) Sentry.captureException(err);
+          }
+        });
+      });
+
       // Client-authority: handle goal concessions
       socket.removeAllListeners('goalConceded');
       socket.on('goalConceded', (data) => {

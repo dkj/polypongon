@@ -172,6 +172,25 @@ export class ServerGame extends BaseGame {
     onGoal(edgeIndex) {
         this.triggerScore(this.score, edgeIndex);
     }
+
+    // Client-authority: handle paddle hit from client to keep score sync
+    onClientPaddleHit(socketId, data) {
+        const playerEdge = this.players.get(socketId);
+        if (playerEdge === undefined) return;
+
+        // Verify the client is reporting their own edge
+        if (data.edgeIndex !== playerEdge) {
+            console.warn(`Client ${socketId} reported hit on wrong edge`);
+            return;
+        }
+
+        // Increment server score
+        this.score++;
+
+        // We do NOT emit 'gameEvent' (bounce) here because clients 
+        // handle bounce sounds optimistically. 
+        // This server score is just for the HUD and final state.
+    }
     // -------------
 
     // Client-authority: handle goal concession from client
