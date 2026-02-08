@@ -264,8 +264,11 @@ export class Game extends BaseGame {
             this.polygon.updateVertices();
 
             // Setup paddles from server data
-            // Preserve local player's paddle for client-side prediction
-            const myCurrentPaddle = this.playerIndex !== -1 ?
+            // Preserve local player's paddle for client-side prediction, 
+            // BUT NOT during transitions to COUNTDOWN (restart)
+            const isRestarting = state.gameState === 'COUNTDOWN' && this.gameState !== 'COUNTDOWN';
+
+            const myCurrentPaddle = (this.playerIndex !== -1 && !isRestarting) ?
                 this.paddles.find(p => p.edgeIndex === this.playerIndex) : null;
 
             this.paddles = state.paddles.map(pData => {
@@ -275,10 +278,16 @@ export class Game extends BaseGame {
                     return myCurrentPaddle;
                 }
 
-                // Use server position for other players
+                // Use server position for other players (and for ourself if restarting)
                 const p = new Paddle(pData.edgeIndex);
                 p.position = pData.position;
                 p.width = pData.width ?? Math.max(0.1, 0.4 / (this.difficulty * 0.8));
+
+                // If this is OUR paddle and we are restarting, sync the local prediction tracker
+                if (this.playerIndex !== -1 && pData.edgeIndex === this.playerIndex) {
+                    this.myPaddlePosition = p.position;
+                }
+
                 return p;
             });
 
