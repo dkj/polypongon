@@ -182,6 +182,9 @@ export class ServerGame extends BaseGame {
             return;
         }
 
+        // Only count hits if the server is actually in the PLAYING state
+        if (this.gameState !== 'PLAYING') return;
+
         // Increment server score
         this.score++;
 
@@ -201,6 +204,12 @@ export class ServerGame extends BaseGame {
         // Verify the client is reporting their own edge
         if (edgeIndex !== playerEdge) {
             console.warn(`Client ${socketId} reported goal on wrong edge`);
+            return;
+        }
+
+        // Only process goals if the server is actually in the PLAYING state
+        if (this.gameState !== 'PLAYING') {
+            console.warn(`Client ${socketId} reported goal while server is in state ${this.gameState}`);
             return;
         }
 
