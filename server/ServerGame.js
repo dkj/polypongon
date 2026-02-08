@@ -137,9 +137,9 @@ export class ServerGame extends BaseGame {
     }
 
     fixedUpdate(dt) {
-        // Client-authoritative physics: server doesn't run collision detection
-        // Only update game rules (timers, state transitions)
-        super.updateGameRules(dt);
+        // Run full physics on server so ball position is tracked for new joiners
+        // We'll make it "silent" by overriding the hooks below
+        super.fixedUpdate(dt);
 
         // Update Paddles Movement based on client input
         this.paddles.forEach(p => {
@@ -147,9 +147,6 @@ export class ServerGame extends BaseGame {
                 p.move(p.moveDirection, dt);
             }
         });
-
-        // Note: No ball physics, no collision detection
-        // Clients run physics and report goals
     }
 
 
@@ -159,18 +156,19 @@ export class ServerGame extends BaseGame {
         this.checkAllReady();
     }
 
-    // --- Hooks ---
-    onPaddleHit(edgeIndex) {
-        super.onPaddleHit(edgeIndex);
-        this.emitToRoom('gameEvent', { type: 'bounce', edgeIndex });
+    // --- Hooks (Quiet Server) ---
+    onPaddleHit(_edgeIndex) {
+        // Silent simulation: do nothing (don't increment score here, 
+        // wait for authoritative client paddleHit event)
     }
 
-    onWallBounce(edgeIndex) {
-        this.emitToRoom('gameEvent', { type: 'bounce', edgeIndex });
+    onWallBounce(_edgeIndex) {
+        // DO NOT emit gameEvent
     }
 
-    onGoal(edgeIndex) {
-        this.triggerScore(this.score, edgeIndex);
+    onGoal(_edgeIndex) {
+        // DO NOT triggerScore on server simulation - server trusts client goalConceded report
+        // This prevents "ghost goals" if server simulation differs from predicted client
     }
 
     // Client-authority: handle paddle hit from client to keep score sync

@@ -88,6 +88,9 @@ export class Game extends BaseGame {
 
         // Client-side paddle prediction
         this.myPaddlePosition = null; // Store predicted position
+
+        // Track if we've received our first state update for join/reconnect sync
+        this.firstStateReceived = false;
     }
 
     addParticles(x, y, color, count = 10) {
@@ -254,10 +257,16 @@ export class Game extends BaseGame {
         this.socket.on('gameState', (state) => {
             // Client-side physics: only ignore ball updates during PLAYING
             // Accept ball updates during SCORING, COUNTDOWN, etc.
-            if (state.gameState !== 'PLAYING') {
+            // OR if this is the very first state update (Join/Reconnect)
+            if (state.gameState !== 'PLAYING' || !this.firstStateReceived) {
                 this.ball.x = state.ball.x;
                 this.ball.y = state.ball.y;
+                if (state.ball.vx !== undefined) {
+                    this.ball.vx = state.ball.vx;
+                    this.ball.vy = state.ball.vy;
+                }
                 this.ball.updateTrail();
+                this.firstStateReceived = true;
             }
 
             this.polygon.rotation = state.rotation;
@@ -394,6 +403,9 @@ export class Game extends BaseGame {
         this.polygon.updateSides(5);
         this.paddles = [new Paddle(0)];
         this.paddles[0].width = 0.5;
+
+        // Reset sync flag for next time
+        this.firstStateReceived = false;
     }
 
     rejoinMultiplayer() {
