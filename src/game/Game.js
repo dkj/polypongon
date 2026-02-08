@@ -489,6 +489,18 @@ export class Game extends BaseGame {
         this.updateParticles(dt);
     }
 
+    updateGameRules(dt) {
+        const savedState = this.gameState;
+        super.updateGameRules(dt);
+
+        // In online mode, we MUST NOT advance the state out of COUNTDOWN locally.
+        // The server is authoritative for the 'PLAYING' transition.
+        if (this.mode === 'online' && savedState === 'COUNTDOWN' && this.gameState === 'PLAYING') {
+            this.gameState = 'COUNTDOWN';
+            this.countdownTimer = 0;
+        }
+    }
+
     update(dt) {
         // Handle Input (Local Paddle)
         let dir = 0;
