@@ -1,7 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { Paddle } from '../src/game/Paddle.js';
 import { BaseGame } from '../src/game/BaseGame.js';
-import { GAME_CONSTANTS } from '../src/game/Constants.js';
 
 export class ServerGame extends BaseGame {
     constructor(io, roomId) {
@@ -138,15 +137,22 @@ export class ServerGame extends BaseGame {
     }
 
     fixedUpdate(dt) {
-        super.fixedUpdate(dt);
+        // Client-authoritative physics: server doesn't run collision detection
+        // Only update game rules (timers, state transitions)
+        super.updateGameRules(dt);
 
-        // Update Paddles Movement (Server specific)
+        // Update Paddles Movement based on client input
         this.paddles.forEach(p => {
             if (p.moveDirection) {
                 p.move(p.moveDirection, dt);
             }
         });
+
+        // Note: No ball physics, no collision detection
+        // Clients run physics and report goals
     }
+
+
 
     onCelebrationEnd() {
         super.onCelebrationEnd();
@@ -167,6 +173,25 @@ export class ServerGame extends BaseGame {
         this.triggerScore(this.score, edgeIndex);
     }
     // -------------
+
+    // Client-authority: handle goal concession from client
+    handleGoalConceded(socketId, data) {
+        const playerEdge = this.players.get(socketId);
+        if (playerEdge === undefined) return;
+
+        const { edgeIndex, score, time } = data;
+
+        // Verify the client is reporting their own edge
+        if (edgeIndex !== playerEdge) {
+            console.warn(`Client ${socketId} reported goal on wrong edge`);
+            return;
+        }
+
+        console.log(`Player on edge ${edgeIndex} conceded goal. Score: ${score}, Time: ${time}`);
+
+        // Trigger game over
+        this.triggerScore(score, edgeIndex);
+    }
 
     triggerScore(finalScore, edgeIndex) {
         this.startCelebration();
@@ -227,7 +252,7 @@ export class ServerGame extends BaseGame {
 
     broadcastState() {
         this.emitToRoom('gameState', {
-            ball: { x: this.ball.x, y: this.ball.y },
+            ball: { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy },
             rotation: this.polygon.rotation,
             rotationDirection: this.rotationDirection,
             paddles: this.paddles.map(p => ({ edgeIndex: p.edgeIndex, position: p.position, width: p.width })),

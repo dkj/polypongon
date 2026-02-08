@@ -204,6 +204,19 @@ io.on('connection', (socket) => {
         });
       });
 
+      // Client-authority: handle goal concessions
+      socket.removeAllListeners('goalConceded');
+      socket.on('goalConceded', (data) => {
+        simulateLatency(() => {
+          try {
+            if (game) game.handleGoalConceded(socket.id, data);
+          } catch (err) {
+            console.error('GoalConceded error:', err);
+            if (process.env.SENTRY_DSN) Sentry.captureException(err);
+          }
+        });
+      });
+
       // Handle disconnect specifically for this room context
       socket.on('disconnect', () => {
         try {
