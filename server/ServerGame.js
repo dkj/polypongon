@@ -110,8 +110,9 @@ export class ServerGame extends BaseGame {
     start() {
         this.running = true;
         this.lastTime = performance.now();
-        const FPS = GAME_CONSTANTS.GAME_FPS;
-        this.interval = setInterval(() => this.loop(), 1000 / FPS);
+        // Run slightly faster than 60 FPS to ensure we always have time to process
+        // but not too fast to burn CPU. 1000/60 = 16.6ms. We'll aim for ~10ms.
+        this.interval = setInterval(() => this.loop(), 10);
     }
 
     stop() {
@@ -125,13 +126,7 @@ export class ServerGame extends BaseGame {
             let dt = (time - this.lastTime) / 1000;
             this.lastTime = time;
 
-            // Clamp dt to prevent simulation explosion (e.g. after pauses or lags)
-            if (dt > 0.1) {
-                // console.warn(`[ServerGame] Excessive dt detected: ${dt.toFixed(4)}s. Clamping to 0.1s.`);
-                dt = 0.1;
-            }
-
-            this.update(dt);
+            this.step(dt);
             this.broadcastState();
         } catch (e) {
             console.error('ServerGame Loop Error:', e);
@@ -142,8 +137,8 @@ export class ServerGame extends BaseGame {
         }
     }
 
-    update(dt) {
-        super.update(dt);
+    fixedUpdate(dt) {
+        super.fixedUpdate(dt);
 
         // Update Paddles Movement (Server specific)
         this.paddles.forEach(p => {
@@ -206,6 +201,7 @@ export class ServerGame extends BaseGame {
 
             // Critical: Reset loop timer to prevent massive dt frame on next loop
             this.lastTime = performance.now();
+            this.accumulator = 0;
 
             this.broadcastState();
         } catch (e) {

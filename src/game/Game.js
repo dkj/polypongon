@@ -2,6 +2,7 @@ import { Paddle } from './Paddle.js';
 import { AudioManager } from './Audio.js';
 import { BaseGame } from './BaseGame.js';
 import { io } from 'socket.io-client';
+import { GAME_CONSTANTS } from './Constants.js';
 
 export class Game extends BaseGame {
     constructor(canvas) {
@@ -208,6 +209,7 @@ export class Game extends BaseGame {
         console.log('Attempting to connect to server...');
         this.clearResults();
         this.mode = 'online';
+        this.lastTime = performance.now();
 
         // Build query parameters for instance routing
         const query = {};
@@ -407,9 +409,16 @@ export class Game extends BaseGame {
     }
 
     loop(time) {
-        const dt = (time - this.lastTime) / 1000;
+        let dt = (time - this.lastTime) / 1000;
         this.lastTime = time;
 
+        this.step(dt);
+
+        this.draw();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    fixedUpdate(dt) {
         // Update visual hint timers for both local and online
         if (this.leftHintTimer > 0) this.leftHintTimer -= dt;
         if (this.rightHintTimer > 0) this.rightHintTimer -= dt;
@@ -432,10 +441,6 @@ export class Game extends BaseGame {
         // though the server will also send updates.
 
         this.updateParticles(dt);
-
-        this.draw();
-
-        requestAnimationFrame((t) => this.loop(t));
     }
 
     update(dt) {
