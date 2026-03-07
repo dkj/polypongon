@@ -441,6 +441,7 @@ export class Game extends BaseGame {
         }
         this.playerIndex = -1;
         this.setGameState('SCORING');
+        this.setMenuVisible(true, 'CONNECTING...');
         this.terminationReason = null;
         this.clearResults();
         this.startMultiplayer(this.currentRoomId, this.currentInstanceId);

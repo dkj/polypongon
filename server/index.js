@@ -150,17 +150,24 @@ io.on('connection', (socket) => {
         return;
       }
 
+      let game = games.get(roomId);
+      if (game && game.gameState === 'TERMINATED') {
+        console.log(`Room ${roomId} was terminated. Cleaning up before new join.`);
+        game.stop();
+        io.in(roomId).socketsLeave(roomId);
+        games.delete(roomId);
+        game = undefined; // Force creation of a fresh game
+      }
+
       socket.join(roomId);
       console.log(`User ${socket.id} joined room ${roomId} on instance ${instanceId}`);
 
-      if (!games.has(roomId)) {
+      if (!game) {
         console.log(`Creating new game for room ${roomId} on instance ${instanceId} `);
-        const game = new ServerGame(io, roomId);
+        game = new ServerGame(io, roomId);
         games.set(roomId, game);
         game.start();
       }
-
-      const game = games.get(roomId);
       const playerIndex = game.addPlayer(socket.id);
 
       socket.emit('init', {
@@ -240,8 +247,12 @@ io.on('connection', (socket) => {
             // Clean up the game ONLY if no players remain
             if (game.players.size === 0) {
               game.stop();
-              games.delete(roomId);
-              console.log(`Game for room ${roomId} cleaned up(empty)`);
+              if (games.get(roomId) === game) {
+                games.delete(roomId);
+                console.log(`Game for room ${roomId} cleaned up(empty)`);
+              } else {
+                console.log(`Old game for room ${roomId} stopped, but a newer game instance already exists.`);
+              }
             }
           }
         } catch (err) {

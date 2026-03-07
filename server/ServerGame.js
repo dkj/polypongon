@@ -116,6 +116,7 @@ export class ServerGame extends BaseGame {
 
     stop() {
         this.running = false;
+        this.destroyed = true;
         clearInterval(this.interval);
     }
 
@@ -283,9 +284,12 @@ export class ServerGame extends BaseGame {
     }
 
     emitToRoom(event, data) {
+        if (this.destroyed) return;
+
         const latency = parseInt(process.env.SIMULATED_LATENCY_MS || '0', 10);
         if (latency > 0) {
             setTimeout(() => {
+                if (this.destroyed) return;
                 this.io.to(this.roomId).emit(event, data);
             }, latency);
         } else {
